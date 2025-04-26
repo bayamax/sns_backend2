@@ -1,0 +1,541 @@
+# 本アプリケーション API 期待設計
+api:
+  posts:
+    create:
+      method: POST
+      path: /api/posts/
+      auth: Bearer トークン必須
+      request:
+        $ref: "#/components/requestBodies/PostCreate"
+      response:
+        $ref: "#/components/schemas/Post"
+    my_posts:
+      method: GET
+      path: /api/posts/
+      auth: Bearer トークン必須
+      response:
+        type: array
+        items:
+          $ref: "#/components/schemas/Post"
+    detail:
+      method: GET
+      path: /api/posts/{pk}/
+      auth: Bearer トークン必須
+      request:
+        params:
+          pk: "投稿ID"
+      response:
+        $ref: "#/components/schemas/Post"
+    update:
+      method: PUT
+      path: /api/posts/{pk}/
+      auth: Bearer トークン必須
+      request:
+        params:
+          pk: "投稿ID"
+        body:
+          $ref: "#/components/requestBodies/PostCreate"
+      response:
+        $ref: "#/components/schemas/Post"
+    delete:
+      method: DELETE
+      path: /api/posts/{pk}/
+      auth: Bearer トークン必須
+      request:
+        params:
+          pk: "投稿ID"
+      response:
+        status: 204 No Content
+    timeline:
+      method: GET
+      path: /api/posts/timeline/
+      auth: Bearer トークン必須
+      request:
+        headers:
+          Authorization: "Bearer <token>"
+      response:
+        description: "フォロー中ユーザーと自身の投稿（ブロック関連を除く）を新しい順に配列で返す。推奨投稿が含まれる場合もある。"
+        type: array # Postスキーマの配列
+        items:
+          $ref: "#/components/schemas/Post"
+    users_by_query:
+      method: GET
+      path: /api/posts/users/
+      auth: Bearer トークン必須
+      request:
+        params:
+          ids: "カンマ区切りユーザーIDリスト (例: 1,5,10)"
+      response:
+        type: array
+        items:
+          $ref: "#/components/schemas/Post"
+    users_by_id:
+      method: GET
+      path: /api/posts/user/{user_id}/
+      auth: Bearer トークン必須
+      request:
+        params:
+          user_id: "ユーザーID"
+      response:
+        type: array
+        items:
+          $ref: "#/components/schemas/Post"
+    like:
+      method: POST
+      path: /api/posts/{pk}/like/
+      auth: Bearer トークン必須
+      request:
+        params:
+          pk: "投稿ID"
+      response:
+        type: object
+        properties:
+          liked:
+            type: boolean
+          post:
+            $ref: "#/components/schemas/Post"
+    comments:
+      method: GET
+      path: /api/posts/{pk}/comments/
+      auth: Bearer トークン必須
+      request:
+        params:
+          pk: "親投稿ID"
+      response:
+        type: array
+        items:
+          $ref: "#/components/schemas/Post"
+    create_comment:
+      method: POST
+      path: /api/posts/{pk}/comments/
+      auth: Bearer トークン必須
+      request:
+        params:
+          pk: "親投稿ID"
+        body:
+          $ref: "#/components/requestBodies/PostCreate"
+      response:
+        $ref: "#/components/schemas/Post"
+    child_comments:
+      method: GET
+      path: /api/posts/{pk}/child-comments/
+      auth: Bearer トークン必須
+      request:
+        params:
+          pk: "親コメントID"
+      response:
+        type: array
+        items:
+          $ref: "#/components/schemas/Post"
+    report:
+      method: POST
+      path: /api/posts/{pk}/report/
+      auth: Bearer トークン必須
+      request:
+        params:
+          pk: "報告対象の投稿ID"
+        body:
+          $ref: "#/components/requestBodies/ReportCreate"
+      response:
+        status: 201 Created
+        body:
+          type: object
+          properties:
+            detail:
+              type: string
+              example: "投稿を報告しました。"
+  accounts:
+    follow:
+      method: POST
+      path: /api/accounts/users/{user_id}/follow/
+      auth: Bearer トークン必須
+    unfollow:
+      method: DELETE
+      path: /api/accounts/users/{user_id}/follow/
+      auth: Bearer トークン必須
+    block:
+      method: POST
+      path: /api/accounts/{user_id}/block/
+      auth: Bearer トークン必須
+    unblock:
+      method: DELETE
+      path: /api/accounts/{user_id}/block/
+      auth: Bearer トークン必須
+  recommendations:
+    list:
+      method: GET
+      path: /api/recommendations/
+      auth: Bearer トークン必須
+    update:
+      method: POST
+      path: /api/recommendations/update
+      auth: Bearer トークン必須
+    generate_vector:
+      method: POST
+      path: /api/recommendations/ai/generate-vector/{post_id}/
+      auth: Bearer トークン必須
+      request:
+        params:
+          post_id: "投稿ID"
+      response:
+        status: 202 Accepted
+        body:
+          type: object
+          properties:
+            detail:
+              type: string
+              example: "Vector generation started."
+  notifications:
+    list:
+      method: GET
+      path: /api/notifications/
+      auth: Bearer トークン必須
+      response:
+        type: array
+        items:
+          $ref: "#/components/schemas/Notification"
+    unread:
+      method: GET
+      path: /api/notifications/unread/
+      auth: Bearer トークン必須
+      response:
+        type: array
+        items:
+          $ref: "#/components/schemas/Notification"
+    mark_read:
+      method: PATCH
+      path: /api/notifications/{id}/read/
+      auth: Bearer トークン必須
+      response:
+        $ref: "#/components/schemas/Notification"
+    mark_all_read:
+      method: POST
+      path: /api/notifications/mark-all-read/
+      auth: Bearer トークン必須
+      response:
+        type: object
+        properties:
+          detail:
+            type: string
+components:
+  schemas:
+    Post:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        user:
+          $ref: "#/components/schemas/UserBrief"
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        likes_count:
+          type: integer
+        replies_count:
+          type: integer
+        is_liked:
+          type: boolean
+        child_replies:
+          type: array
+          items:
+            $ref: "#/components/schemas/Post"
+          description: "シリアライザレベルで再帰的に取得される場合がある"
+        is_reply:
+          type: boolean
+        parent_post:
+          type: integer
+          nullable: true
+        is_from_followed_user: # バックエンドが付与するフラグ
+          type: boolean
+          nullable: true
+    UserBrief:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+          nullable: true
+        profileImageUrl:
+          type: string
+        bio:
+          type: string
+        followers_count:
+          type: integer
+        following_count:
+          type: integer
+    Notification:
+      type: object
+      properties:
+        id:
+          type: integer
+        recipient:
+          $ref: "#/components/schemas/UserBrief"
+        sender:
+          $ref: "#/components/schemas/UserBrief"
+        notification_type:
+          type: string
+          enum:
+            - like
+            - follow
+            - reply
+            - mention
+        post:
+          $ref: "#/components/schemas/Post"
+          nullable: true
+        read:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+    Like:
+      type: object
+      properties:
+        user_id:
+          type: integer
+        post_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+    Report:
+      type: object
+      properties:
+        id:
+          type: integer
+        reporter_id:
+          type: integer
+        reported_post_id:
+          type: integer
+        reason:
+          type: string
+          enum:
+            - spam
+            - inappropriate
+            - harassment
+            - other
+          nullable: true
+        detail:
+          type: string
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+            - pending
+            - resolved
+            - ignored
+    unlike:
+      method: DELETE
+      path: /api/posts/{pk}/like/
+      auth: Bearer トークン必須
+      request:
+        params:
+          pk: "投稿ID"
+      response:
+        status: 200 OK
+        body:
+          $ref: "#/components/schemas/PostLikeResponse"
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserBrief"
+    FollowStatusResponse:
+      type: object
+      properties:
+        is_following:
+          type: boolean
+    PostLikeResponse:
+      type: object
+      properties:
+        liked:
+          type: boolean
+        post:
+          $ref: "#/components/schemas/Post"
+    UserRecommendation:
+      type: object
+      properties:
+        id:
+          type: integer
+        user:
+          $ref: '#/components/schemas/UserBrief'
+        score:
+          type: number
+          format: double
+        follow_probability:
+          type: number
+          format: double
+        uncertainty:
+          type: number
+          format: double
+  requestBodies:
+    PostCreate:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string
+        parent_post:
+          type: integer
+          nullable: true
+    ReportCreate:
+      type: object
+      properties:
+        reason:
+          type: string
+          enum:
+            - spam
+            - inappropriate
+            - harassment
+            - other
+          nullable: true
+        detail:
+          type: string
+          nullable: true
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - email
+        - password
+        - password2
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        password2:
+          type: string
+    ProfileUpdateRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        bio:
+          type: string
+        profile_image:
+          type: string
+          format: binary
+      required:
+        - username
+        - bio
+      encoding:
+        profile_image:
+          contentType: image/jpeg, image/png
+variables:
+  backend:
+    file: sns_backend/posts/views.py
+    classes:
+      - name: TimelineView
+        method: get
+        local_vars:
+          - followed_user_ids: フォロー中ユーザーIDリスト
+          - blocked_user_ids: 自分がブロックしたユーザーIDリスト
+          - blocked_by_user_ids: 自分をブロックしたユーザーIDリスト
+          - blocked_related_user_ids: 上記2つの結合集合
+          - q_objects: Q(user=self) OR Q(user_id__in=followed_user_ids)
+          - posts_query: posts.filter(q_objects, parent_post__isnull=True)
+              .exclude(blocked)
+              .annotate(likesCount, repliesCount)
+          - recommended_user_ids: UserRecommendation より取得
+          - recommended_posts_query: 推奨ユーザー投稿クエリ
+      - name: UserPostsView
+        method: get
+        logic:
+          - blocked_user_ids: 自分がブロックしたユーザーIDリスト
+          - posts: user_id__in=ids パラメータ or user_id
+            .exclude(blocked_user_ids)
+  models:
+    Post:
+      fields:
+        - id: Integer
+        - user: ForeignKey(User)
+        - content: Text
+        - created_at: DateTime
+        - updated_at: DateTime
+        - likes: ManyToManyField(User, through=Like)
+        - parent_post: ForeignKey(self, null=True, blank=True)
+        - replies_count: Integer
+      relations:
+      notes: |
+        いいね機能はバックエンドでは実装されているが、現在のフロントエンドではUI実装されていない。
+        将来的に実装予定。
+    Like:
+      fields:
+        - id: Integer
+        - user: ForeignKey(User, related_name='likes')
+        - post: ForeignKey(Post)
+        - created_at: DateTime
+      meta:
+        - unique_together: [user, post]
+      notes: |
+        現在のフロントエンドでは未実装だが、バックエンドAPIは提供されている。
+    User:
+      relations:
+        - likes: Reverse(Like, related_name='likes')
+    Follow:
+      fields: [follower, following]
+    Block:
+      fields: [blocker, blocked]
+    UserRecommendation:
+      fields: [user, recommended_user, score, follow_probability]
+    Report:
+      fields:
+        - id: Integer
+        - reporter: ForeignKey(User)
+        - reported_post: ForeignKey(Post)
+        - reason: CharField (choicesあり)
+        - detail: TextField (nullable)
+        - timestamp: DateTime
+        - status: CharField (choicesあり)
+
+# 管理画面 (Django Admin) 仕様
+admin_interface:
+  reports:
+    model: Report
+    list_display: # 一覧表示項目
+      - id
+      - reported_post
+      - reporter
+      - reason
+      - status
+      - timestamp
+    list_filter: # フィルタ項目
+      - status
+      - reason
+      - timestamp
+    search_fields: # 検索対象項目
+      - reported_post__content # 投稿内容
+      - reporter__username     # 報告者ユーザー名
+      - reported_post__user__username # 投稿者ユーザー名
+      - detail                 # 詳細
+    list_editable: # 一覧画面で編集可能にする項目
+      - status 
