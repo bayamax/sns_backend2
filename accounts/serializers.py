@@ -36,6 +36,13 @@ class UserSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.profile_image_url)
         return None
 
+    def get_is_blocked_by_me(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            # blocker=リクエストユーザー, blocked=プロフィール対象ユーザー で検索
+            return Block.objects.filter(blocker=request.user, blocked=obj).exists()
+        return False
+
     def get_am_i_blocked(self, obj):
         request = self.context.get('request')
         print(f"--- Debug: get_am_i_blocked ---")
