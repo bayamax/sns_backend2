@@ -286,21 +286,5 @@ class UserDetailView(generics.RetrieveUpdateAPIView):
         serializer = self.get_serializer(instance)
         data = serializer.data
 
-        # ★★★ ブロック状態を追加 ★★★
-        is_blocked_by_me = False
-        am_i_blocked = False
-        if request.user.is_authenticated:
-            is_blocked_by_me = Block.objects.filter(blocker=request.user, blocked=instance).exists()
-            am_i_blocked = Block.objects.filter(blocker=instance, blocked=request.user).exists()
-        
-        data['is_blocked_by_me'] = is_blocked_by_me
-        data['am_i_blocked'] = am_i_blocked
-        
-        # フォロー状態も追加 (これは既存かもしれないが確認)
-        is_following = False
-        if request.user.is_authenticated:
-             is_following = Follow.objects.filter(follower=request.user, following=instance).exists()
-        data['is_following'] = is_following
-
         return Response(data)
     

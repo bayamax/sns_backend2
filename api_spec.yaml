@@ -161,11 +161,26 @@ api:
       method: DELETE
       path: /api/accounts/{user_id}/block/
       auth: Bearer トークン必須
+    get_profile:
+      method: GET
+      path: /api/accounts/users/{pk}/
+      auth: Bearer トークン必須 (または ReadOnly)
+      request:
+        params:
+          pk: "対象ユーザーのID"
+      response:
+        description: "指定されたユーザーのプロフィール情報（ブロック状態、フォロー状態含む）を返す。"
+        $ref: "#/components/schemas/UserBrief"
   recommendations:
     list:
       method: GET
       path: /api/recommendations/
       auth: Bearer トークン必須
+      response:
+        description: "ユーザーへのフォロー推薦リスト（ブロック関連ユーザーを除く）を返す。"
+        type: array
+        items:
+          $ref: "#/components/schemas/UserRecommendation"
     update:
       method: POST
       path: /api/recommendations/update
@@ -273,6 +288,15 @@ components:
           type: integer
         following_count:
           type: integer
+        is_blocked_by_me:
+          type: boolean
+          description: "リクエストユーザーがこのユーザーをブロックしているか"
+        am_i_blocked:
+          type: boolean
+          description: "このユーザーがリクエストユーザーをブロックしているか"
+        is_following:
+          type: boolean
+          description: "リクエストユーザーがこのユーザーをフォローしているか"
     Notification:
       type: object
       properties:

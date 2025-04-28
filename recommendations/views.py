@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from .models import UserRecommendation, UserEmbedding
 from .serializers import UserRecommendationSerializer
-from accounts.models import Follow
+from accounts.models import Follow, Block
 from django.db.models import Q
 from django.contrib.auth import get_user_model
 
@@ -23,6 +23,16 @@ class RecommendationsView(APIView):
             # すでにフォローしているユーザーを除外
             following_users = Follow.objects.filter(follower=request.user).values_list('following_id', flat=True)
             recommendations = recommendations.exclude(recommended_user__in=following_users)
+            
+            # ★★★ ブロック関連ユーザーを除外 ★★★
+            # 自分がブロックしているユーザーIDリストを取得
+            blocked_user_ids = Block.objects.filter(blocker=request.user).values_list('blocked_id', flat=True)
+            # 自分をブロックしているユーザーIDリストを取得
+            blocked_by_user_ids = Block.objects.filter(blocked=request.user).values_list('blocker_id', flat=True)
+            # 除外対象のユーザーIDリスト (Setで重複排除)
+            exclude_user_ids = set(blocked_user_ids) | set(blocked_by_user_ids)
+            recommendations = recommendations.exclude(recommended_user_id__in=exclude_user_ids)
+            # ★★★ ここまで追加 ★★★
             
             # 自分自身を除外
             recommendations = recommendations.exclude(recommended_user=request.user)
