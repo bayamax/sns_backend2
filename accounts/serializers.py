@@ -3,7 +3,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model, authenticate
 from django.utils.translation import gettext_lazy as _
-from .models import Follow
+from .models import Follow, Block
 
 User = get_user_model()
 
@@ -32,6 +32,26 @@ class UserSerializer(serializers.ModelSerializer):
                 # 修正点: build_absolute_url ではなく build_absolute_uri を使用
                 return request.build_absolute_uri(obj.profile_image_url)
         return None
+
+    def get_am_i_blocked(self, obj):
+        request = self.context.get('request')
+        print(f"--- Debug: get_am_i_blocked ---")
+        print(f"    Profile User (obj.id): {obj.id}")
+        if request and request.user.is_authenticated:
+            print(f"    Request User (request.user.id): {request.user.id}")
+            # blocker=プロフィール対象ユーザー, blocked=リクエストユーザー で検索
+            exists = Block.objects.filter(blocker=obj, blocked=request.user).exists()
+            print(f"    Block record exists (blocker={obj.id}, blocked={request.user.id}): {exists}")
+            return exists
+        else:
+            print(f"    Request user not authenticated or request context missing.")
+            return False
+
+    def get_is_following(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return Follow.objects.filter(follower=request.user, following=obj).exists()
+        return False
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     """ユーザー登録シリアライザー"""
