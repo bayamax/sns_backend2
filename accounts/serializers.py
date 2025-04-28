@@ -16,8 +16,8 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'profile_image_url', 'bio', 
-                  'followers_count', 'following_count']
-        read_only_fields = ['id', 'followers_count', 'following_count']
+                  'followers_count', 'following_count', 'is_blocked_by_me', 'am_i_blocked', 'is_following']
+        read_only_fields = ['id', 'followers_count', 'following_count', 'is_blocked_by_me', 'am_i_blocked', 'is_following']
     
     def get_followers_count(self, obj):
         return obj.followers_count
