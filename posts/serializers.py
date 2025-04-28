@@ -8,13 +8,13 @@ User = get_user_model()
 
 class UserBriefSerializer(serializers.ModelSerializer):
     """簡易的なユーザー情報のシリアライザー（投稿用）"""
-    profileImageUrl = serializers.SerializerMethodField()
+    profile_image_url = serializers.SerializerMethodField()
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'profileImageUrl', 'bio']
+        fields = ['id', 'username', 'profile_image_url', 'bio']
     
-    def get_profileImageUrl(self, obj):
+    def get_profile_image_url(self, obj):
         return obj.profile_image_url
 
 class PostSerializer(serializers.ModelSerializer):
