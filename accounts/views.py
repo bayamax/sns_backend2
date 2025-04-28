@@ -29,7 +29,7 @@ class RegisterView(APIView):
                 'id': user.id,
                 'username': user.username,
                 'email': user.email,
-                'password': str(refresh.access_token)  # Swiftアプリとの整合性のためtokenをpasswordとして返す
+                'token': str(refresh.access_token)
             }
             
             return Response(response_data, status=status.HTTP_201_CREATED)
@@ -42,28 +42,19 @@ class LoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
-            username = serializer.validated_data['username']
-            password = serializer.validated_data['password']
+            user = serializer.validated_data['user']
             
-            user = authenticate(username=username, password=password)
+            refresh = RefreshToken.for_user(user)
             
-            if user:
-                refresh = RefreshToken.for_user(user)
-                
-                # レスポンスデータの作成
-                response_data = {
-                    'id': user.id,
-                    'username': user.username,
-                    'email': user.email,
-                    'profileImageUrl': user.profile_image_url,
-                    'bio': user.bio,
-                    'followersCount': user.followers_count,
-                    'followingCount': user.following_count,
-                    'password': str(refresh.access_token)  # Swiftアプリとの整合性のためtokenをpasswordとして返す
-                }
-                
-                return Response(response_data)
-            return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+            # UserSerializer を使ってユーザー情報を取得 (snake_case になる)
+            user_data = UserSerializer(user, context={'request': request}).data
+            
+            # トークンを追加
+            response_data = user_data
+            # キーを 'password' から 'token' に変更
+            response_data['token'] = str(refresh.access_token)
+            
+            return Response(response_data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class UserProfileView(APIView):

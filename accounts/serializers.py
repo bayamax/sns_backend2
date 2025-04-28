@@ -9,23 +9,23 @@ User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
     """ユーザーシリアライザー"""
-    followersCount = serializers.SerializerMethodField()
-    followingCount = serializers.SerializerMethodField()
-    profileImageUrl = serializers.SerializerMethodField()
+    followers_count = serializers.SerializerMethodField()
+    following_count = serializers.SerializerMethodField()
+    profile_image_url = serializers.SerializerMethodField()
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'profileImageUrl', 'bio', 
-                  'followersCount', 'followingCount']
-        read_only_fields = ['id', 'followersCount', 'followingCount']
+        fields = ['id', 'username', 'email', 'profile_image_url', 'bio', 
+                  'followers_count', 'following_count']
+        read_only_fields = ['id', 'followers_count', 'following_count']
     
-    def get_followersCount(self, obj):
+    def get_followers_count(self, obj):
         return obj.followers_count
     
-    def get_followingCount(self, obj):
+    def get_following_count(self, obj):
         return obj.following_count
     
-    def get_profileImageUrl(self, obj):
+    def get_profile_image_url(self, obj):
         if obj.profile_image and hasattr(obj.profile_image, 'url'):
             request = self.context.get('request')
             if request:
@@ -186,15 +186,15 @@ UserProfileSerializer = UserProfileUpdateSerializer
 
 class UserListSerializer(serializers.ModelSerializer):
     """ユーザーリスト表示用シリアライザー"""
-    profileImageUrl = serializers.SerializerMethodField()
-    followersCount = serializers.SerializerMethodField()
-    followingCount = serializers.SerializerMethodField()
+    profile_image_url = serializers.SerializerMethodField()
+    followers_count = serializers.SerializerMethodField()
+    following_count = serializers.SerializerMethodField()
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'profileImageUrl', 'bio', 'followersCount', 'followingCount']
+        fields = ['id', 'username', 'profile_image_url', 'bio', 'followers_count', 'following_count']
     
-    def get_profileImageUrl(self, obj):
+    def get_profile_image_url(self, obj):
         if obj.profile_image and hasattr(obj.profile_image, 'url'):
             request = self.context.get('request')
             if request:
@@ -202,9 +202,9 @@ class UserListSerializer(serializers.ModelSerializer):
             return obj.profile_image.url
         return None
     
-    def get_followersCount(self, obj):
+    def get_followers_count(self, obj):
         return Follow.objects.filter(following=obj).count()
     
-    def get_followingCount(self, obj):
+    def get_following_count(self, obj):
         return Follow.objects.filter(follower=obj).count()
 
