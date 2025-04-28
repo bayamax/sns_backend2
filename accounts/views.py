@@ -67,7 +67,7 @@ class UserProfileView(APIView):
         if not user:
             return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
         
-        serializer = UserSerializer(user)
+        serializer = UserSerializer(user, context={'request': request})
         return Response(serializer.data)
     
     def put(self, request):
