@@ -12,6 +12,9 @@ class UserSerializer(serializers.ModelSerializer):
     followers_count = serializers.SerializerMethodField()
     following_count = serializers.SerializerMethodField()
     profile_image_url = serializers.SerializerMethodField()
+    is_blocked_by_me = serializers.SerializerMethodField()
+    am_i_blocked = serializers.SerializerMethodField()
+    is_following = serializers.SerializerMethodField()
     
     class Meta:
         model = User

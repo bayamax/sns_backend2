@@ -280,7 +280,7 @@ components:
         email:
           type: string
           nullable: true
-        profileImageUrl:
+        profile_image_url:
           type: string
         bio:
           type: string
