@@ -41,12 +41,12 @@ BOT_ACCOUNT_USERNAMES = [
 # (URLは例です。有効なものを追加・修正してください)
 RSS_FEED_URL_LIST = [
     'https://www.nhk.or.jp/rss/news/cat0.xml', # NHK主要
-    'https://news.yahoo.co.jp/rss/topics/top-picks.xml', # Yahoo!主要
-    'https://www.asahi.com/rss/asahi/newsheadlines.rdf', # 朝日新聞
-    'https://www.yomiuri.co.jp/rss/yol/latestnews', # 読売新聞
-    'https://mainichi.jp/rss/etc/mainichi-flash.rss', # 毎日新聞
-    'https://rss.itmedia.co.jp/rss/2.0/itmedia_news.xml', # ITmedia News
-    'https://www.gizmodo.jp/index.xml', # Gizmodo Japan
+    #'https://news.yahoo.co.jp/rss/topics/top-picks.xml', # Yahoo!主要
+    #'https://www.asahi.com/rss/asahi/newsheadlines.rdf', # 朝日新聞
+    #'https://www.yomiuri.co.jp/rss/yol/latestnews', # 読売新聞
+    #'https://mainichi.jp/rss/etc/mainichi-flash.rss', # 毎日新聞
+    #'https://rss.itmedia.co.jp/rss/2.0/itmedia_news.xml', # ITmedia News
+    #'https://www.gizmodo.jp/index.xml', # Gizmodo Japan
     # 必要に応じて他のURLを追加
 ]
 # -------------------------------------------
