@@ -66,7 +66,7 @@ PROCESS_ITEM_LIMIT = getattr(settings, 'BOT_SETTINGS', {}).get('PROCESS_ITEM_LIM
 
 
 class Command(BaseCommand):
-    help = 'Fetches RSS summaries from a randomly selected feed, finds relevant bot, posts as that bot.'
+    help = 'Fetches RSS summaries, checks bot embeddings, finds relevant bot, posts as that bot.'
 
     # (他のメソッド __init__, get_device, etc. は変更なし)
     def __init__(self, *args, **kwargs):
@@ -191,9 +191,44 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write(self.style.NOTICE("Starting bot posting process (Random Feed, Post as similar bot)...")) # help メッセージを更新
 
+        # --- 初期チェック ---
         if not self.openai_available: self.stdout.write(self.style.ERROR("OpenAI key not available.")); return
         if not self.converter_model: self.stdout.write(self.style.ERROR("Converter model not loaded.")); return
-        if not self.bot_users: self.stdout.write(self.style.ERROR("No valid bot accounts.")); return
+        if not self.bot_users: self.stdout.write(self.style.ERROR("No valid bot accounts available for posting.")); return
+
+        # --- ★ ここでボット全員のベクトル存在チェックを追加 ---
+        unique_bot_usernames = list(set(BOT_ACCOUNT_USERNAMES))
+        required_bot_count = len(unique_bot_usernames)
+
+        try:
+            # DB内で、リスト内のユーザー名を持ち、かつnode2vec_vectorが存在するレコード数をカウント
+            valid_vector_count = UserEmbedding.objects.filter(
+                user__username__in=unique_bot_usernames,
+                node2vec_vector__isnull=False
+            ).count()
+
+            self.stdout.write(f"Checking embeddings for {required_bot_count} unique bot accounts...")
+            self.stdout.write(f"Found {valid_vector_count} bot accounts with valid Node2Vec embeddings.")
+
+            if valid_vector_count < required_bot_count:
+                # 不足しているアカウントを特定（オプションだが、ログとして有用）
+                users_with_vectors = UserEmbedding.objects.filter(
+                    user__username__in=unique_bot_usernames,
+                    node2vec_vector__isnull=False
+                ).values_list('user__username', flat=True)
+                missing_bots = [name for name in unique_bot_usernames if name not in users_with_vectors]
+                self.stdout.write(self.style.ERROR(
+                    f"Missing Node2Vec embeddings for {required_bot_count - valid_vector_count} bot accounts. "
+                    f"Cannot proceed. Missing: {', '.join(missing_bots[:5])}{'...' if len(missing_bots) > 5 else ''}" # 長すぎると見にくいので先頭5件表示
+                ))
+                self.stdout.write(self.style.NOTICE("Hint: Run 'aggregate_user_vectors' command to generate missing embeddings."))
+                return # 処理を終了
+            else:
+                self.stdout.write(self.style.SUCCESS("All required bot accounts have Node2Vec embeddings."))
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f"Error checking bot embeddings: {e}"))
+            return # DBエラーなどが発生した場合も終了
+        # --- ベクトルチェック完了 ---
 
         # --- ★ ここでRSSフィードURLをランダムに選択 ---
         if not RSS_FEED_URL_LIST:
