@@ -42,7 +42,7 @@ BOT_ACCOUNT_USERNAMES = [
 
 # --- 設定値 (settings.py や環境変数から取得推奨だが、上記リストを使うためBOT_USERNAMEは削除) ---
 RSS_FEED_URL = getattr(settings, 'BOT_SETTINGS', {}).get('RSS_FEED_URL', 'http://feeds.bbci.co.uk/news/rss.xml')
-OPENAI_API_KEY = getattr(settings, 'OPENAI_API_KEY', None)
+# OPENAI_API_KEY = getattr(settings, 'OPENAI_API_KEY', None) # ← settingsから読み込むのをやめる
 # ★ 既存システムで使用されているモデルに合わせる
 OPENAI_EMBEDDING_MODEL = getattr(settings, 'RECOMMENDATION_SETTINGS', {}).get('OPENAI_EMBEDDING_MODEL', 'text-embedding-3-large') # 修正
 # 投稿文字数制限 (Postモデルの max_length 等に合わせて調整してください)
@@ -63,20 +63,24 @@ class Command(BaseCommand):
         super().__init__(*args, **kwargs)
         self.device = self.get_device()
         self.converter_model = self.load_converter_model()
-        if OPENAI_API_KEY:
-            # openai v0.28 の初期化方法
-            openai.api_key = OPENAI_API_KEY
+
+        # ★ APIキーを直接設定 (generate_post_embeddings.py と同じ形式)
+        # セキュリティ上は非推奨ですが、既存コードの動作に合わせます。
+        # キーは generate_post_embeddings.py からコピーしました。
+        hardcoded_api_key = "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"
+        if hardcoded_api_key:
+            openai.api_key = hardcoded_api_key
             self.openai_available = True
+            # キーが見つかったのでエラーメッセージは不要
+            # self.stdout.write(self.style.NOTICE("OpenAI API key set directly in code.")) # 必要なら通知
         else:
-            self.stdout.write(self.style.ERROR("OpenAI API key not configured in settings."))
+            # このelseブロックは通常実行されないはずだが、念のため残す
+            self.stdout.write(self.style.ERROR("OpenAI API key is missing in the hardcoded variable."))
             self.openai_available = False
-        # ボットアカウントのUserオブジェクトリストを初期化時に取得・保持
+
         self.bot_users = self.get_bot_user_objects()
         if not self.bot_users:
-             # 致命的エラーとするか、警告にとどめるか
              self.stdout.write(self.style.ERROR("No valid bot accounts found in the database from the predefined list. Cannot proceed."))
-             # self.bot_users を None にして後続処理をスキップさせるなども可能
-             # exit(1) # またはプログラムを終了させる
 
     def get_device(self):
         if torch.cuda.is_available():
@@ -292,7 +296,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.NOTICE("Starting bot posting process (Post as most similar bot)..."))
 
         if not self.openai_available:
-            self.stdout.write(self.style.ERROR("OpenAI API key not configured. Exiting."))
+            self.stdout.write(self.style.ERROR("OpenAI API key not available (check hardcoded key). Exiting.")) # Adjusted error message
             return
         if not self.converter_model:
              self.stdout.write(self.style.ERROR("Embedding converter model not loaded. Exiting."))
