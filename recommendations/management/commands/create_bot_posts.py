@@ -20,41 +20,52 @@ NODE2VEC_DIM = getattr(settings, ...)
 AVG_POST_TO_ACCOUNT_MODEL_PATH = getattr(settings, ...) 
 PROCESS_ITEM_LIMIT = getattr(settings, ...) 
 
-# --- ★ AvgPostToAccountModel の定義をここにコピー --- 
-# train_average_post_to_account.py から持ってくる
+# --- ★ ハードコードする設定値 ★ ---
+HARDCODED_OPENAI_EMBEDDING_MODEL = 'text-embedding-3-large'
+HARDCODED_POST_MAX_LENGTH = 280
+HARDCODED_POST_IDENTIFIER_PREFIX = '【Bot News】'
+HARDCODED_OPENAI_DIM = 3072
+HARDCODED_NODE2VEC_DIM = 128
+HARDCODED_AVG_POST_TO_ACCOUNT_MODEL_PATH = 'recommendations/pretrained/avg_post_to_account_model.pt'
+HARDCODED_PROCESS_ITEM_LIMIT = 10
+# -----------------------------------
+
+# --- モデル定義 ---
+class ResidualBlock(nn.Module):
+    def __init__(self, input_dim, output_dim, dropout):
+        super().__init__()
+        self.block = nn.Sequential(nn.Linear(input_dim, output_dim), nn.LayerNorm(output_dim), nn.ReLU(), nn.Dropout(dropout))
+        self.shortcut = nn.Linear(input_dim, output_dim) if input_dim != output_dim else nn.Identity()
+    def forward(self, x): return self.block(x) + self.shortcut(x)
+
 class AvgPostToAccountModel(nn.Module):
-    def __init__(self, input_dim=OPENAI_DIM, output_dim=NODE2VEC_DIM, dropout=0.2): # 定数を使うように変更
+    def __init__(self, input_dim, output_dim, dropout=0.2):
         super(AvgPostToAccountModel, self).__init__()
-        self.model = nn.Sequential(
-            nn.Linear(input_dim, 1024),
-            nn.LayerNorm(1024),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(1024, 512),
-            nn.LayerNorm(512),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(512, 256),
-            nn.LayerNorm(256),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(256, output_dim)
-        )
-    def forward(self, x):
-        return self.model(x)
-# ----------------------------------------------------
+        self.model = nn.Sequential(ResidualBlock(input_dim, 1024, dropout), ResidualBlock(1024, 512, dropout), ResidualBlock(512, 256, dropout), nn.Linear(256, output_dim))
+    def forward(self, x): return self.model(x)
+# -----------------
 
 class Command(BaseCommand):
-    help = 'Uses AvgPostToAccountModel to map news embedding and find similar bot.'
+    help = 'Uses AvgPostToAccountModel to map news embedding and find similar bot (Hardcoded settings).'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.device = self.get_device()
-        # ★ loadメソッド内でモデルをロードする
-        self.avg_post_to_account_model = self.load_avg_post_to_account_model()
-        # ... (openai key, bot users のロードは変更なし) ...
-        hardcoded_api_key = "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"
-        if hardcoded_api_key: openai.api_key = hardcoded_api_key; self.openai_available = True
+
+        # --- ★ ハードコードされた設定値をインスタンス変数に設定 ---
+        self.openai_embedding_model = HARDCODED_OPENAI_EMBEDDING_MODEL
+        self.post_max_length = HARDCODED_POST_MAX_LENGTH
+        self.post_identifier_prefix = HARDCODED_POST_IDENTIFIER_PREFIX
+        self.openai_dim = HARDCODED_OPENAI_DIM
+        self.node2vec_dim = HARDCODED_NODE2VEC_DIM
+        self.avg_post_to_account_model_path = HARDCODED_AVG_POST_TO_ACCOUNT_MODEL_PATH
+        self.process_item_limit = HARDCODED_PROCESS_ITEM_LIMIT
+        # ----------------------------------------------------------
+
+        self.avg_post_to_account_model = self.load_avg_post_to_account_model() # モデルロードは設定値設定の後
+        hardcoded_api_key = "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" # APIキーは元々ハードコード済み
+        if hardcoded_api_key:
+            openai.api_key = hardcoded_api_key; self.openai_available = True
         else: self.stdout.write(self.style.ERROR("OpenAI API key missing.")); self.openai_available = False
         self.bot_users = self.get_bot_user_objects()
         if not self.bot_users: self.stdout.write(self.style.ERROR("No valid bot accounts found."))
@@ -67,32 +78,22 @@ class Command(BaseCommand):
             except Exception: pass
         return torch.device("cpu")
 
-    # ★ モデルロードメソッドの修正 ★
     def load_avg_post_to_account_model(self):
+        # ★ インスタンス変数を参照
+        model = AvgPostToAccountModel(input_dim=self.openai_dim, output_dim=self.node2vec_dim)
         try:
-            # AvgPostToAccountModelクラスを使ってインスタンス化
-            model = AvgPostToAccountModel().to(self.device) 
-            # 保存されたstate_dictをロード
-            model.load_state_dict(torch.load(AVG_POST_TO_ACCOUNT_MODEL_PATH, map_location=self.device))
-            model.eval()
-            self.stdout.write(self.style.SUCCESS(f"Loaded AvgPostToAccountModel from {AVG_POST_TO_ACCOUNT_MODEL_PATH}"))
+            # ★ インスタンス変数を参照
+            model.load_state_dict(torch.load(self.avg_post_to_account_model_path, map_location=self.device)); model = model.to(self.device); model.eval()
+            self.stdout.write(self.style.SUCCESS(f"Loaded AvgPostToAccountModel from {self.avg_post_to_account_model_path}"))
             return model
-        except FileNotFoundError:
-            self.stdout.write(self.style.ERROR(f"Model file not found: {AVG_POST_TO_ACCOUNT_MODEL_PATH}"))
-            return None
-        except RuntimeError as e:
-            self.stdout.write(self.style.ERROR(f"Error loading state_dict (structure mismatch?): {e}"))
-            self.stdout.write(self.style.WARNING("Ensure the model definition matches the saved .pt file exactly."))
-            return None
-        except Exception as e:
-            self.stdout.write(self.style.ERROR(f"Error loading AvgPostToAccountModel: {e}"))
-            return None
+        except FileNotFoundError: self.stdout.write(self.style.ERROR(f"Model not found: {self.avg_post_to_account_model_path}")); return None
+        except Exception as e: self.stdout.write(self.style.ERROR(f"Error loading AvgPostToAccountModel: {e}")); return None
 
-    # (get_bot_user_objects, fetch_rss_summaries, get_openai_embedding は変更なし) ...
     def get_bot_user_objects(self):
+        # (変更なし)
         unique_bot_usernames = list(set(BOT_ACCOUNT_USERNAMES)); users = User.objects.filter(username__in=unique_bot_usernames)
         found_usernames = [user.username for user in users]; missing_usernames = [name for name in unique_bot_usernames if name not in found_usernames]
-        if missing_usernames: self.stdout.write(self.style.WARNING(f"Bots not found: {', '.join(missing_usernames)} "))
+        if missing_usernames: self.stdout.write(self.style.WARNING(f"Bots not found: {', '.join(missing_usernames)}"))
         self.stdout.write(f"Found {users.count()} valid bot accounts.")
         return list(users)
     
@@ -111,28 +112,29 @@ class Command(BaseCommand):
         if not self.openai_available: return None; cleaned_text = re.sub('<[^<]+?>', '', text).strip()
         if not cleaned_text: return None
         try:
-            response = openai.Embedding.create(input=cleaned_text, model=OPENAI_EMBEDDING_MODEL)
+            # ★ インスタンス変数を参照
+            response = openai.Embedding.create(input=cleaned_text, model=self.openai_embedding_model)
             return np.array(response['data'][0]['embedding'])
         except openai.error.RateLimitError as e: self.stdout.write(self.style.WARNING(f"OpenAI Rate limit: {e}. Wait...")); time.sleep(20); return None
         except openai.error.InvalidRequestError as e: self.stdout.write(self.style.WARNING(f"OpenAI Invalid Request: {e}")); return None
         except Exception as e: self.stdout.write(self.style.ERROR(f"Error get OpenAI embed: {e}")); return None
 
-    # map_openai_to_account_vector は正しいモデルインスタンスを使うようになる
     def map_openai_to_account_vector(self, openai_vector):
         if self.avg_post_to_account_model is None or openai_vector is None: return None
-        if openai_vector.shape[0] != OPENAI_DIM: self.stdout.write(self.style.ERROR(f"Input vector dim mismatch.")); return None
+        # ★ インスタンス変数を参照
+        if openai_vector.shape[0] != self.openai_dim: self.stdout.write(self.style.ERROR(f"Input vector dim mismatch.")); return None
         try:
             with torch.no_grad():
                 tensor = torch.tensor(openai_vector, dtype=torch.float32).unsqueeze(0).to(self.device)
-                output = self.avg_post_to_account_model(tensor) # 正しいクラスのインスタンスが使われる
+                output = self.avg_post_to_account_model(tensor)
                 return output.squeeze(0).cpu().numpy()
         except Exception as e: self.stdout.write(self.style.ERROR(f"Error applying AvgPostToAccountModel: {e}")); return None
 
-    # (find_most_similar_bot, create_post_as_similar_bot, handle は変更なし) ...
     def find_most_similar_bot(self, target_account_vector, bot_user_objects):
         if target_account_vector is None or not bot_user_objects: return None
-        if target_account_vector.shape[0] != NODE2VEC_DIM:
-             self.stdout.write(self.style.ERROR(f"Target vector dim ({target_account_vector.shape[0]}) != NODE2VEC_DIM ({NODE2VEC_DIM}). Model output error?"))
+        # ★ インスタンス変数を参照
+        if target_account_vector.shape[0] != self.node2vec_dim:
+             self.stdout.write(self.style.ERROR(f"Target vector dim ({target_account_vector.shape[0]}) != NODE2VEC_DIM ({self.node2vec_dim}). Model output error?"))
              return None
         bot_usernames = [user.username for user in bot_user_objects]
         bot_embeddings = UserEmbedding.objects.filter(user__username__in=bot_usernames, node2vec_vector__isnull=False).select_related('user')
@@ -141,13 +143,15 @@ class Command(BaseCommand):
         for be in bot_embeddings:
             try:
                 vec = np.array(be.node2vec_vector)
-                if vec.shape == (NODE2VEC_DIM,): bot_node2vec_vectors.append(vec); bot_embedding_users.append(be.user)
+                # ★ インスタンス変数を参照
+                if vec.shape == (self.node2vec_dim,): bot_node2vec_vectors.append(vec); bot_embedding_users.append(be.user)
             except (TypeError, ValueError): pass
         if not bot_node2vec_vectors: self.stdout.write(self.style.WARNING("No valid Node2Vec vectors for bots.")); return None
         similarity_results = []
         try:
             target_vec_reshaped = target_account_vector.reshape(1, -1)
-            if target_vec_reshaped.shape[1] != NODE2VEC_DIM: self.stdout.write(self.style.ERROR("Reshaped target vector dim incorrect.")); return []
+            # ★ インスタンス変数を参照
+            if target_vec_reshaped.shape[1] != self.node2vec_dim: self.stdout.write(self.style.ERROR("Reshaped target vector dim incorrect.")); return []
             similarity_scores = cosine_similarity(target_vec_reshaped, np.array(bot_node2vec_vectors))[0]
             for i, user_obj in enumerate(bot_embedding_users):
                  similarity_results.append({'user': user_obj, 'similarity': similarity_scores[i]})
@@ -157,12 +161,16 @@ class Command(BaseCommand):
     def create_post_as_similar_bot(self, post_author_user, content_summary, original_link):
         cleaned_summary = re.sub('<[^<]+?>', '', content_summary).strip();
         if not cleaned_summary: return None
-        post_content = f"{POST_IDENTIFIER_PREFIX}\n\"{cleaned_summary}\"";
-        if len(post_content) > POST_MAX_LENGTH:
-            available_length = POST_MAX_LENGTH - len(f"{POST_IDENTIFIER_PREFIX}\n\"\"") - 3;
+        # ★ インスタンス変数を参照
+        post_content = f"{self.post_identifier_prefix}\n\"{cleaned_summary}\""
+        # ★ インスタンス変数を参照
+        if len(post_content) > self.post_max_length:
+            # ★ インスタンス変数を参照
+            available_length = self.post_max_length - len(f"{self.post_identifier_prefix}\n\"\"") - 3;
             if available_length < 10: self.stdout.write(self.style.WARNING(f"Cannot fit summary.")); return None
-            truncated_summary = cleaned_summary[:available_length] + "..."; post_content = f"{POST_IDENTIFIER_PREFIX}\n\"{truncated_summary}\"";
-        if len(post_content) > POST_MAX_LENGTH: self.stdout.write(self.style.WARNING(f"Final post too long.")); return None
+            truncated_summary = cleaned_summary[:available_length] + "..."; post_content = f"{self.post_identifier_prefix}\n\"{truncated_summary}\"" ;
+        # ★ インスタンス変数を使うように修正
+        if len(post_content) > self.post_max_length: self.stdout.write(self.style.WARNING(f"Final post too long.")); return None
         try:
             if Post.objects.filter(content__icontains=original_link).exists():
                 self.stdout.write(self.style.WARNING(f"Post link exists: {original_link}"))
@@ -172,11 +180,12 @@ class Command(BaseCommand):
         except Exception as e: self.stdout.write(self.style.ERROR(f"Failed post as {post_author_user.username}: {e}")); return None
 
     def handle(self, *args, **options):
-        self.stdout.write(self.style.NOTICE("Starting bot posting process (Using AvgPostToAccountModel)...")) # メッセージ修正
+        self.stdout.write(self.style.NOTICE("Starting bot posting process (Using AvgPostToAccountModel - Hardcoded settings)..."))
         if not self.openai_available: self.stdout.write(self.style.ERROR("OpenAI key not available.")); return
         if not self.avg_post_to_account_model: self.stdout.write(self.style.ERROR("AvgPostToAccountModel not loaded.")); return
         if not self.bot_users: self.stdout.write(self.style.ERROR("No valid bot accounts available.")); return
 
+        # (ベクトル存在チェックは変更なし)
         unique_bot_usernames = list(set(BOT_ACCOUNT_USERNAMES)); required_bot_count = len(unique_bot_usernames)
         try:
             valid_vector_count = UserEmbedding.objects.filter(user__username__in=unique_bot_usernames,node2vec_vector__isnull=False).count()
@@ -200,7 +209,8 @@ class Command(BaseCommand):
         if not content_items: self.stdout.write(self.style.WARNING(f"No content items from {selected_rss_url}.")); return
 
         processed_count = 0; posted_count = 0
-        items_to_process = content_items[:PROCESS_ITEM_LIMIT]
+        # ★ インスタンス変数を使うように修正
+        items_to_process = content_items[:self.process_item_limit]
         self.stdout.write(f"Attempting to process up to {len(items_to_process)} items...")
 
         for item in items_to_process:
