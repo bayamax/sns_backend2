@@ -1,4 +1,12 @@
-# ... (他の imports) ...
+import feedparser
+import numpy as np
+import torch
+import openai # openai v0.28 を想定
+import time
+import re
+import random
+from django.core.management.base import BaseCommand
+# from django.conf import settings # ← settings のインポートを削除（またはコメントアウト）
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 from sklearn.metrics.pairwise import cosine_similarity
@@ -9,16 +17,27 @@ from recommendations.models import UserEmbedding
 
 User = get_user_model()
 
-# --- 定数 (変更なし) ---
-BOT_ACCOUNT_USERNAMES = [...] 
-RSS_FEED_URL_LIST = [...] 
-OPENAI_EMBEDDING_MODEL = getattr(settings, ...) 
-POST_MAX_LENGTH = getattr(settings, ...) 
-POST_IDENTIFIER_PREFIX = getattr(settings, ...) 
-OPENAI_DIM = getattr(settings, ...) 
-NODE2VEC_DIM = getattr(settings, ...)
-AVG_POST_TO_ACCOUNT_MODEL_PATH = getattr(settings, ...) 
-PROCESS_ITEM_LIMIT = getattr(settings, ...) 
+BOT_ACCOUNT_USERNAMES = [
+    "AIStartupDX", "ArcadeVSJP", "ArtExhibitJP", "BaseballHRJP", "BGArt_JP",
+    "BirdGardenJP", "BizBookJP", "BizBookJP", "BizBookJP", "CarEnthusiastJP",
+    "CasualTalkJP", "CertAIBizJP", "CoffeeCraftJP", "CompCodingJP", "ConservDXJP",
+    "CosplayLiveJP", "CraftBeerJP", "DailyChatJP", "DailyVlogJP", "DartsBarJP",
+    "DevPatternsJP", "EVMobilityJP", "FIRECareerJP", "FrontierTechJP", "GamerLogJP",
+    "GenArtFeed", "GiveawayJP", "HistoryIFJP", "HRCareerJP", "HRWellbeingJP",
+    "HYBEKpopJP", "IdolFanLogJP", "IdolFansJP", "IndieDevMaker", "IndieGameApp",
+    "IndieMobileAI", "InsectBreedJP", "JLeagueHub", "JPComedyTV", "KenpoPolitics",
+    "KimonoDIY", "LiveBandJP", "LocalDXJP", "LocalMuseumJP", "LocalTravelJP",
+    "LoveMarryJP", "MangaPanelsJP", "MetaverseVT", "MonozukuriNet", "ObsoleteMedia",
+    "OjouRoleJP", "OSSProdDev", "PortraitEvtJP", "PPTDesignLab", "PrizeWinJP",
+    "ProgCareerJP", "ProVolleyJP", "RamenReportJP", "ReptileTubeJP", "RetailFastJP",
+    "RhythmGameJP", "RPA_LLM", "SeiyuAudioJP", "SentoSaunaJP", "ShukatsuLab",
+    "ShuroSupport", "SocBlogJP", "SoundMakersJP", "SpaceWatchJP", "StageLiveJP",
+    "SubcultureJP", "TicketTradeJP", "ToyamaLocalJP", "TriviaPromoJP", "USRightWatch",
+    "WatchManiaJP", "YouTubeSceneJP"
+]
+RSS_FEED_URL_LIST = [
+    'https://www.nhk.or.jp/rss/news/cat0.xml',
+]
 
 # --- ★ ハードコードする設定値 ★ ---
 HARDCODED_OPENAI_EMBEDDING_MODEL = 'text-embedding-3-large'
@@ -71,7 +90,6 @@ class Command(BaseCommand):
         if not self.bot_users: self.stdout.write(self.style.ERROR("No valid bot accounts found."))
 
     def get_device(self):
-        # (変更なし)
         if torch.cuda.is_available(): return torch.device("cuda")
         elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
             try: torch.zeros(1, device="mps"); return torch.device("mps")
@@ -96,8 +114,9 @@ class Command(BaseCommand):
         if missing_usernames: self.stdout.write(self.style.WARNING(f"Bots not found: {', '.join(missing_usernames)}"))
         self.stdout.write(f"Found {users.count()} valid bot accounts.")
         return list(users)
-    
+
     def fetch_rss_summaries(self, url):
+        # (変更なし)
         self.stdout.write(f"Fetching summaries from RSS feed: {url}"); summary_list = []
         try:
             feed = feedparser.parse(url)
@@ -168,7 +187,7 @@ class Command(BaseCommand):
             # ★ インスタンス変数を参照
             available_length = self.post_max_length - len(f"{self.post_identifier_prefix}\n\"\"") - 3;
             if available_length < 10: self.stdout.write(self.style.WARNING(f"Cannot fit summary.")); return None
-            truncated_summary = cleaned_summary[:available_length] + "..."; post_content = f"{self.post_identifier_prefix}\n\"{truncated_summary}\"" ;
+            truncated_summary = cleaned_summary[:available_length] + "..."; post_content = f"{self.post_identifier_prefix}\n\"{truncated_summary}\"";
         # ★ インスタンス変数を使うように修正
         if len(post_content) > self.post_max_length: self.stdout.write(self.style.WARNING(f"Final post too long.")); return None
         try:
@@ -179,8 +198,9 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"Created post ID {post.id} as {post_author_user.username}")); return post
         except Exception as e: self.stdout.write(self.style.ERROR(f"Failed post as {post_author_user.username}: {e}")); return None
 
+
     def handle(self, *args, **options):
-        self.stdout.write(self.style.NOTICE("Starting bot posting process (Using AvgPostToAccountModel - Hardcoded settings)..."))
+        self.stdout.write(self.style.NOTICE("Starting bot posting process (Using AvgPostToAccountModel)..."))
         if not self.openai_available: self.stdout.write(self.style.ERROR("OpenAI key not available.")); return
         if not self.avg_post_to_account_model: self.stdout.write(self.style.ERROR("AvgPostToAccountModel not loaded.")); return
         if not self.bot_users: self.stdout.write(self.style.ERROR("No valid bot accounts available.")); return
