@@ -146,8 +146,23 @@ class Command(BaseCommand):
         except Exception as e: self.stdout.write(self.style.ERROR(f"Failed fetch/parse RSS: {e}")); return []
 
     def get_openai_embedding(self, text):
-        if not self.openai_available: return None; cleaned_text = re.sub('<[^<]+?>', '', text).strip()
-        if not cleaned_text: return None
+        # 1. APIキーのチェック
+        if not self.openai_available:
+            # self.stdout.write(self.style.ERROR("OpenAI API key not available.")) # ログは冗長なので省略可
+            return None
+        # 2. 入力テキストの基本的なチェック
+        if not text:
+            return None
+
+        # 3. テキストのクリーニングと代入
+        cleaned_text = re.sub('<[^<]+?>', '', text).strip()
+
+        # 4. クリーニング後のテキストが空でないかチェック
+        if not cleaned_text:
+            # self.stdout.write(self.style.WARNING("Text became empty after cleaning HTML.")) # 必要ならログ出力
+            return None
+
+        # 5. OpenAI API 呼び出し
         try:
             response = openai.Embedding.create(input=cleaned_text, model=self.openai_embedding_model)
             return np.array(response['data'][0]['embedding'])
