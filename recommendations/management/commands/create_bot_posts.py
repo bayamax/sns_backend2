@@ -1,15 +1,4 @@
-# recommendations/management/commands/create_bot_posts.py
-
-# (Imports remain the same)
-import feedparser
-import numpy as np
-import torch
-import openai # openai v0.28 を想定
-import time
-import re
-import random
-from django.core.management.base import BaseCommand
-from django.conf import settings
+# ... (他の imports) ...
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 from sklearn.metrics.pairwise import cosine_similarity
@@ -17,56 +6,55 @@ import torch.nn as nn
 
 from posts.models import Post
 from recommendations.models import UserEmbedding
-# from recommendations.ml_models import AvgPostToAccountModel # No longer needed
 
 User = get_user_model()
 
-# (Constants BOT_ACCOUNT_USERNAMES, RSS_FEED_URL_LIST, etc. remain the same)
-BOT_ACCOUNT_USERNAMES = [
-    "AIStartupDX", "ArcadeVSJP", "ArtExhibitJP", "BaseballHRJP", "BGArt_JP",
-    "BirdGardenJP", "BizBookJP", "BizBookJP", "BizBookJP", "CarEnthusiastJP",
-    "CasualTalkJP", "CertAIBizJP", "CoffeeCraftJP", "CompCodingJP", "ConservDXJP",
-    "CosplayLiveJP", "CraftBeerJP", "DailyChatJP", "DailyVlogJP", "DartsBarJP",
-    "DevPatternsJP", "EVMobilityJP", "FIRECareerJP", "FrontierTechJP", "GamerLogJP",
-    "GenArtFeed", "GiveawayJP", "HistoryIFJP", "HRCareerJP", "HRWellbeingJP",
-    "HYBEKpopJP", "IdolFanLogJP", "IdolFansJP", "IndieDevMaker", "IndieGameApp",
-    "IndieMobileAI", "InsectBreedJP", "JLeagueHub", "JPComedyTV", "KenpoPolitics",
-    "KimonoDIY", "LiveBandJP", "LocalDXJP", "LocalMuseumJP", "LocalTravelJP",
-    "LoveMarryJP", "MangaPanelsJP", "MetaverseVT", "MonozukuriNet", "ObsoleteMedia",
-    "OjouRoleJP", "OSSProdDev", "PortraitEvtJP", "PPTDesignLab", "PrizeWinJP",
-    "ProgCareerJP", "ProVolleyJP", "RamenReportJP", "ReptileTubeJP", "RetailFastJP",
-    "RhythmGameJP", "RPA_LLM", "SeiyuAudioJP", "SentoSaunaJP", "ShukatsuLab",
-    "ShuroSupport", "SocBlogJP", "SoundMakersJP", "SpaceWatchJP", "StageLiveJP",
-    "SubcultureJP", "TicketTradeJP", "ToyamaLocalJP", "TriviaPromoJP", "USRightWatch",
-    "WatchManiaJP", "YouTubeSceneJP"
-]
-RSS_FEED_URL_LIST = [
-    'https://www.nhk.or.jp/rss/news/cat0.xml',
-]
-OPENAI_EMBEDDING_MODEL = getattr(settings, 'RECOMMENDATION_SETTINGS', {}).get('OPENAI_EMBEDDING_MODEL', 'text-embedding-3-large')
-POST_MAX_LENGTH = getattr(settings, 'BOT_SETTINGS', {}).get('POST_MAX_LENGTH', 280)
-POST_IDENTIFIER_PREFIX = getattr(settings, 'BOT_SETTINGS', {}).get('POST_IDENTIFIER_PREFIX', '【Bot News】')
-OPENAI_DIM = getattr(settings, 'RECOMMENDATION_SETTINGS', {}).get('OPENAI_DIM', 3072)
-NODE2VEC_DIM = getattr(settings, 'RECOMMENDATION_SETTINGS', {}).get('NODE2VEC_DIM', 128)
-AVG_POST_TO_ACCOUNT_MODEL_PATH = getattr(settings, 'MODEL_PATHS', {}).get('AVG_POST_TO_ACCOUNT', 'recommendations/pretrained/avg_post_to_account_model.pt')
-PROCESS_ITEM_LIMIT = getattr(settings, 'BOT_SETTINGS', {}).get('PROCESS_ITEM_LIMIT', 10)
+# --- 定数 (変更なし) ---
+BOT_ACCOUNT_USERNAMES = [...] 
+RSS_FEED_URL_LIST = [...] 
+OPENAI_EMBEDDING_MODEL = getattr(settings, ...) 
+POST_MAX_LENGTH = getattr(settings, ...) 
+POST_IDENTIFIER_PREFIX = getattr(settings, ...) 
+OPENAI_DIM = getattr(settings, ...) 
+NODE2VEC_DIM = getattr(settings, ...)
+AVG_POST_TO_ACCOUNT_MODEL_PATH = getattr(settings, ...) 
+PROCESS_ITEM_LIMIT = getattr(settings, ...) 
 
-# --- モデル定義を削除 ---
-# class ResidualBlock(nn.Module): ...
-# class AvgPostToAccountModel(nn.Module): ...
-# ---------------------
+# --- ★ AvgPostToAccountModel の定義をここにコピー --- 
+# train_average_post_to_account.py から持ってくる
+class AvgPostToAccountModel(nn.Module):
+    def __init__(self, input_dim=OPENAI_DIM, output_dim=NODE2VEC_DIM, dropout=0.2): # 定数を使うように変更
+        super(AvgPostToAccountModel, self).__init__()
+        self.model = nn.Sequential(
+            nn.Linear(input_dim, 1024),
+            nn.LayerNorm(1024),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(1024, 512),
+            nn.LayerNorm(512),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(512, 256),
+            nn.LayerNorm(256),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(256, output_dim)
+        )
+    def forward(self, x):
+        return self.model(x)
+# ----------------------------------------------------
 
 class Command(BaseCommand):
-    help = 'Uses AvgPostToAccountModel (loaded with simple structure) to map news embedding and find similar bot.'
+    help = 'Uses AvgPostToAccountModel to map news embedding and find similar bot.'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.device = self.get_device()
-        # ★ loadメソッド内でモデル構造を定義しロードする
+        # ★ loadメソッド内でモデルをロードする
         self.avg_post_to_account_model = self.load_avg_post_to_account_model()
+        # ... (openai key, bot users のロードは変更なし) ...
         hardcoded_api_key = "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"
-        if hardcoded_api_key:
-            openai.api_key = hardcoded_api_key; self.openai_available = True
+        if hardcoded_api_key: openai.api_key = hardcoded_api_key; self.openai_available = True
         else: self.stdout.write(self.style.ERROR("OpenAI API key missing.")); self.openai_available = False
         self.bot_users = self.get_bot_user_objects()
         if not self.bot_users: self.stdout.write(self.style.ERROR("No valid bot accounts found."))
@@ -79,39 +67,20 @@ class Command(BaseCommand):
             except Exception: pass
         return torch.device("cpu")
 
-    # ★ 新しいモデル構造をここで定義してロードするメソッドに変更 ★
+    # ★ モデルロードメソッドの修正 ★
     def load_avg_post_to_account_model(self):
-        # エラーメッセージから推測されるシンプルなSequentialモデル構造
-        # Dropout率は train_average_post_to_account.py に合わせる (0.2)
-        dropout_rate = 0.2
         try:
-            # モデル構造を state_dict に合わせて定義
-            model = nn.Sequential(
-                nn.Linear(OPENAI_DIM, 1024),     # model.0
-                nn.LayerNorm(1024),             # model.1
-                nn.ReLU(),                      # model.2
-                nn.Dropout(dropout_rate),       # model.3
-                nn.Linear(1024, 512),           # model.4
-                nn.LayerNorm(512),              # model.5
-                nn.ReLU(),                      # model.6
-                nn.Dropout(dropout_rate),       # model.7
-                nn.Linear(512, 256),            # model.8
-                nn.LayerNorm(256),              # model.9
-                nn.ReLU(),                      # model.10
-                nn.Dropout(dropout_rate),       # model.11
-                nn.Linear(256, NODE2VEC_DIM)    # model.12 (出力層)
-            )
+            # AvgPostToAccountModelクラスを使ってインスタンス化
+            model = AvgPostToAccountModel().to(self.device) 
             # 保存されたstate_dictをロード
             model.load_state_dict(torch.load(AVG_POST_TO_ACCOUNT_MODEL_PATH, map_location=self.device))
-            model = model.to(self.device)
             model.eval()
-            self.stdout.write(self.style.SUCCESS(f"Loaded AvgPostToAccountModel (Sequential structure) from {AVG_POST_TO_ACCOUNT_MODEL_PATH}"))
+            self.stdout.write(self.style.SUCCESS(f"Loaded AvgPostToAccountModel from {AVG_POST_TO_ACCOUNT_MODEL_PATH}"))
             return model
         except FileNotFoundError:
             self.stdout.write(self.style.ERROR(f"Model file not found: {AVG_POST_TO_ACCOUNT_MODEL_PATH}"))
             return None
         except RuntimeError as e:
-            # state_dict のキーが依然として合わない場合
             self.stdout.write(self.style.ERROR(f"Error loading state_dict (structure mismatch?): {e}"))
             self.stdout.write(self.style.WARNING("Ensure the model definition matches the saved .pt file exactly."))
             return None
@@ -119,17 +88,15 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(f"Error loading AvgPostToAccountModel: {e}"))
             return None
 
-    # (get_bot_user_objects, fetch_rss_summaries, get_openai_embedding unchanged)
+    # (get_bot_user_objects, fetch_rss_summaries, get_openai_embedding は変更なし) ...
     def get_bot_user_objects(self):
-        # ... (変更なし) ...
         unique_bot_usernames = list(set(BOT_ACCOUNT_USERNAMES)); users = User.objects.filter(username__in=unique_bot_usernames)
         found_usernames = [user.username for user in users]; missing_usernames = [name for name in unique_bot_usernames if name not in found_usernames]
-        if missing_usernames: self.stdout.write(self.style.WARNING(f"Bots not found: {', '.join(missing_usernames)}"))
+        if missing_usernames: self.stdout.write(self.style.WARNING(f"Bots not found: {', '.join(missing_usernames)} "))
         self.stdout.write(f"Found {users.count()} valid bot accounts.")
         return list(users)
-
+    
     def fetch_rss_summaries(self, url):
-        # ... (変更なし) ...
         self.stdout.write(f"Fetching summaries from RSS feed: {url}"); summary_list = []
         try:
             feed = feedparser.parse(url)
@@ -141,7 +108,6 @@ class Command(BaseCommand):
         except Exception as e: self.stdout.write(self.style.ERROR(f"Failed fetch/parse RSS: {e}")); return []
 
     def get_openai_embedding(self, text):
-        # ... (変更なし) ...
         if not self.openai_available: return None; cleaned_text = re.sub('<[^<]+?>', '', text).strip()
         if not cleaned_text: return None
         try:
@@ -151,20 +117,19 @@ class Command(BaseCommand):
         except openai.error.InvalidRequestError as e: self.stdout.write(self.style.WARNING(f"OpenAI Invalid Request: {e}")); return None
         except Exception as e: self.stdout.write(self.style.ERROR(f"Error get OpenAI embed: {e}")); return None
 
-    # ★ map_openai_to_account_vector は新しいモデルを使うので変更なしだが、呼び出すモデルが Sequential になった
+    # map_openai_to_account_vector は正しいモデルインスタンスを使うようになる
     def map_openai_to_account_vector(self, openai_vector):
         if self.avg_post_to_account_model is None or openai_vector is None: return None
         if openai_vector.shape[0] != OPENAI_DIM: self.stdout.write(self.style.ERROR(f"Input vector dim mismatch.")); return None
         try:
             with torch.no_grad():
                 tensor = torch.tensor(openai_vector, dtype=torch.float32).unsqueeze(0).to(self.device)
-                output = self.avg_post_to_account_model(tensor) # ここで Sequential モデルが呼ばれる
+                output = self.avg_post_to_account_model(tensor) # 正しいクラスのインスタンスが使われる
                 return output.squeeze(0).cpu().numpy()
         except Exception as e: self.stdout.write(self.style.ERROR(f"Error applying AvgPostToAccountModel: {e}")); return None
 
-    # (find_most_similar_bot, create_post_as_similar_bot は変更なし)
+    # (find_most_similar_bot, create_post_as_similar_bot, handle は変更なし) ...
     def find_most_similar_bot(self, target_account_vector, bot_user_objects):
-        # ... (変更なし) ...
         if target_account_vector is None or not bot_user_objects: return None
         if target_account_vector.shape[0] != NODE2VEC_DIM:
              self.stdout.write(self.style.ERROR(f"Target vector dim ({target_account_vector.shape[0]}) != NODE2VEC_DIM ({NODE2VEC_DIM}). Model output error?"))
@@ -190,31 +155,28 @@ class Command(BaseCommand):
         except Exception as e: self.stdout.write(self.style.ERROR(f"Error during similarity calculation: {e}")); return []
 
     def create_post_as_similar_bot(self, post_author_user, content_summary, original_link):
-        # ... (実装は変更なし、ただしインデント修正済み) ...
         cleaned_summary = re.sub('<[^<]+?>', '', content_summary).strip();
         if not cleaned_summary: return None
-        post_content = f"{POST_IDENTIFIER_PREFIX}\\n\\\"{cleaned_summary}\\\"";
+        post_content = f"{POST_IDENTIFIER_PREFIX}\n\"{cleaned_summary}\"";
         if len(post_content) > POST_MAX_LENGTH:
-            available_length = POST_MAX_LENGTH - len(f"{POST_IDENTIFIER_PREFIX}\\n\\\"\\\"") - 3;
+            available_length = POST_MAX_LENGTH - len(f"{POST_IDENTIFIER_PREFIX}\n\"\"") - 3;
             if available_length < 10: self.stdout.write(self.style.WARNING(f"Cannot fit summary.")); return None
-            truncated_summary = cleaned_summary[:available_length] + "..."; post_content = f"{POST_IDENTIFIER_PREFIX}\\n\\\"{truncated_summary}\\\"";
+            truncated_summary = cleaned_summary[:available_length] + "..."; post_content = f"{POST_IDENTIFIER_PREFIX}\n\"{truncated_summary}\"";
         if len(post_content) > POST_MAX_LENGTH: self.stdout.write(self.style.WARNING(f"Final post too long.")); return None
         try:
             if Post.objects.filter(content__icontains=original_link).exists():
                 self.stdout.write(self.style.WARNING(f"Post link exists: {original_link}"))
-                return None # 正しいインデント
+                return None
             post = Post.objects.create(user=post_author_user, content=post_content);
             self.stdout.write(self.style.SUCCESS(f"Created post ID {post.id} as {post_author_user.username}")); return post
         except Exception as e: self.stdout.write(self.style.ERROR(f"Failed post as {post_author_user.username}: {e}")); return None
 
-    # (handle メソッドは、モデルのチェックと map_openai_to_account_vector 呼び出し以外は変更なし)
     def handle(self, *args, **options):
-        self.stdout.write(self.style.NOTICE("Starting bot posting process (Using AvgPostToAccountModel - Simple Structure)..."))
+        self.stdout.write(self.style.NOTICE("Starting bot posting process (Using AvgPostToAccountModel)...")) # メッセージ修正
         if not self.openai_available: self.stdout.write(self.style.ERROR("OpenAI key not available.")); return
         if not self.avg_post_to_account_model: self.stdout.write(self.style.ERROR("AvgPostToAccountModel not loaded.")); return
         if not self.bot_users: self.stdout.write(self.style.ERROR("No valid bot accounts available.")); return
 
-        # (ベクトル存在チェックは変更なし、ただし else の後の処理が正しいインデントに)
         unique_bot_usernames = list(set(BOT_ACCOUNT_USERNAMES)); required_bot_count = len(unique_bot_usernames)
         try:
             valid_vector_count = UserEmbedding.objects.filter(user__username__in=unique_bot_usernames,node2vec_vector__isnull=False).count()
@@ -232,7 +194,6 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(f"Error checking bot embeddings: {e}"))
             return
 
-        # (これ以降の RSS 取得、ループ処理は変更なしだが、map_openai_to_account_vector を呼び出す)
         if not RSS_FEED_URL_LIST: self.stdout.write(self.style.ERROR("RSS_FEED_URL_LIST empty.")); return
         selected_rss_url = random.choice(RSS_FEED_URL_LIST); self.stdout.write(f"Selected RSS feed: {selected_rss_url}")
         content_items = self.fetch_rss_summaries(selected_rss_url)
@@ -253,7 +214,6 @@ class Command(BaseCommand):
             openai_embedding = self.get_openai_embedding(cleaned_summary)
             if openai_embedding is None: time.sleep(1); continue
 
-            # ★ 新しいマッピング関数を呼び出す
             mapped_account_vector = self.map_openai_to_account_vector(openai_embedding)
             if mapped_account_vector is None:
                  self.stdout.write(self.style.WARNING(f"Could not map embedding for: {title}"))
