@@ -40,6 +40,11 @@ BOT_ACCOUNT_USERNAMES = [
 ]
 RSS_FEED_URL_LIST = [
     'https://www.nhk.or.jp/rss/news/cat0.xml', # NHK主要 (リストはそのまま)
+    'https://www.gizmodo.jp/index.xml',
+    'https://www.asahi.com/rss/asahi/newsheadlines.rdf', # 朝日新聞
+    'https://www.yomiuri.co.jp/rss/yol/latestnews', # 読売新聞
+    'https://mainichi.jp/rss/etc/mainichi-flash.rss', # 毎日新聞
+    'https://rss.itmedia.co.jp/rss/2.0/itmedia_news.xml', 
 ]
 
 # --- ★ ハードコードする設定値 ★ ---
