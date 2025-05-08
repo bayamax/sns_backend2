@@ -28,8 +28,8 @@ class Command(BaseCommand):
         self.stdout.write(self.style.NOTICE("Step 1: Generating post embeddings..."))
         call_command('generate_post_embeddings', *force_args)
         
-        self.stdout.write(self.style.NOTICE("Step 2: Aggregating user vectors..."))
-        call_command('aggregate_user_vectors', *(user_args + force_args))
+        self.stdout.write(self.style.NOTICE("Step 2: Generating user Node2Vec vectors..."))
+        call_command('generate_user_node2vec', *(user_args + force_args))
         
         self.stdout.write(self.style.NOTICE("Step 3: Generating recommendations..."))
         call_command('generate_recommendations', *(user_args + force_args))
