@@ -40,11 +40,11 @@ BOT_ACCOUNT_USERNAMES = [
 ]
 RSS_FEED_URL_LIST = [
     'https://www.nhk.or.jp/rss/news/cat0.xml', # NHK主要 (リストはそのまま)
-    'https://www.gizmodo.jp/index.xml',
-    'https://www.asahi.com/rss/asahi/newsheadlines.rdf', # 朝日新聞
-    'https://www.yomiuri.co.jp/rss/yol/latestnews', # 読売新聞
-    'https://mainichi.jp/rss/etc/mainichi-flash.rss', # 毎日新聞
-    'https://rss.itmedia.co.jp/rss/2.0/itmedia_news.xml', 
+    #'https://www.gizmodo.jp/index.xml',
+    #'https://www.asahi.com/rss/asahi/newsheadlines.rdf', # 朝日新聞
+    #'https://www.yomiuri.co.jp/rss/yol/latestnews', # 読売新聞
+    #'https://mainichi.jp/rss/etc/mainichi-flash.rss', # 毎日新聞
+    #'https://rss.itmedia.co.jp/rss/2.0/itmedia_news.xml', 
 ]
 
 # --- ★ ハードコードする設定値 ★ ---
@@ -53,38 +53,47 @@ HARDCODED_POST_MAX_LENGTH = 280
 HARDCODED_POST_IDENTIFIER_PREFIX = '【Bot News】'
 HARDCODED_OPENAI_DIM = 3072
 HARDCODED_NODE2VEC_DIM = 128
-HARDCODED_AVG_POST_TO_ACCOUNT_MODEL_PATH = 'recommendations/pretrained/avg_post_to_account_model.pt'
+# HARDCODED_AVG_POST_TO_ACCOUNT_MODEL_PATH = 'recommendations/pretrained/avg_post_to_account_model.pt' # 古いパスをコメントアウトまたは削除
+HARDCODED_DCOR_MODEL_PATH = '/Users/oobayashikoushin/Desktop/test/sns_backend/recommendations/pretrained/dcor_filtered_avg_to_account_model.pt' # 新しいモデルパス
 HARDCODED_PROCESS_ITEM_LIMIT = 10
 # -----------------------------------
 
-# --- ★ ユーザー提供のシンプルなモデル定義に置き換え --- 
-# class ResidualBlock(nn.Module): ... (削除)
+# --- ★ ユーザー提供の新しいモデル定義に置き換え ---
+# class AvgPostToAccountModel(nn.Module): ... (古いモデル定義を削除)
 
-class AvgPostToAccountModel(nn.Module):
+class ResidualBlock(nn.Module):
+    def __init__(self, input_dim, output_dim, dropout):
+        super().__init__()
+        self.block = nn.Sequential(
+            nn.Linear(input_dim, output_dim),
+            nn.LayerNorm(output_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout)
+        )
+        if input_dim != output_dim:
+            self.shortcut = nn.Linear(input_dim, output_dim)
+        else:
+            self.shortcut = nn.Identity()
+    def forward(self, x):
+        return self.block(x) + self.shortcut(x)
+
+class DcorFilteredAvgPostToAccountModel(nn.Module):
     # input_dim, output_dim, dropout は __init__ で渡される
-    def __init__(self, input_dim, output_dim, dropout=0.2):
-        super(AvgPostToAccountModel, self).__init__()
+    # デフォルトの dropout 値はユーザー提供のコードから参照 (0.2)
+    def __init__(self, input_dim=HARDCODED_OPENAI_DIM, output_dim=HARDCODED_NODE2VEC_DIM, dropout=0.2):
+        super().__init__()
         self.model = nn.Sequential(
-            nn.Linear(input_dim, 1024),         # model.0
-            nn.LayerNorm(1024),                 # model.1
-            nn.ReLU(),                          # model.2
-            nn.Dropout(dropout),                # model.3
-            nn.Linear(1024, 512),               # model.4
-            nn.LayerNorm(512),                  # model.5
-            nn.ReLU(),                          # model.6
-            nn.Dropout(dropout),                # model.7
-            nn.Linear(512, 256),                # model.8
-            nn.LayerNorm(256),                  # model.9
-            nn.ReLU(),                          # model.10
-            nn.Dropout(dropout),                # model.11
-            nn.Linear(256, output_dim)        # model.12
+            ResidualBlock(input_dim, 1024, dropout),
+            ResidualBlock(1024, 512, dropout),
+            ResidualBlock(512, 256, dropout),
+            nn.Linear(256, output_dim)
         )
     def forward(self, x):
         return self.model(x)
 # --------------------------------------------------------------
 
 class Command(BaseCommand):
-    help = 'Uses AvgPostToAccountModel to map news embedding and find similar bot (Hardcoded settings).'
+    help = 'Uses DcorFilteredAvgPostToAccountModel to map news embedding and find similar bot (Hardcoded settings).'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -96,11 +105,13 @@ class Command(BaseCommand):
         self.post_identifier_prefix = HARDCODED_POST_IDENTIFIER_PREFIX
         self.openai_dim = HARDCODED_OPENAI_DIM
         self.node2vec_dim = HARDCODED_NODE2VEC_DIM
-        self.avg_post_to_account_model_path = HARDCODED_AVG_POST_TO_ACCOUNT_MODEL_PATH
+        # self.avg_post_to_account_model_path = HARDCODED_AVG_POST_TO_ACCOUNT_MODEL_PATH # 古い変数
+        self.dcor_model_path = HARDCODED_DCOR_MODEL_PATH # 新しい変数
         self.process_item_limit = HARDCODED_PROCESS_ITEM_LIMIT
         # ----------------------------------------------------------
 
-        self.avg_post_to_account_model = self.load_avg_post_to_account_model()
+        # self.avg_post_to_account_model = self.load_avg_post_to_account_model() # 古いモデル読み込み
+        self.dcor_filtered_avg_to_account_model = self.load_dcor_filtered_avg_to_account_model() # 新しいモデル読み込み
         hardcoded_api_key = "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"
         if hardcoded_api_key: openai.api_key = hardcoded_api_key; self.openai_available = True
         else: self.stdout.write(self.style.ERROR("OpenAI API key missing.")); self.openai_available = False
@@ -115,21 +126,30 @@ class Command(BaseCommand):
         return torch.device("cpu")
 
     # ★ モデルロードメソッド - モデルクラスの定義に合わせてインスタンス化
-    def load_avg_post_to_account_model(self):
-        # 正しいクラス (ここで定義したシンプルな構造) を使う
-        model = AvgPostToAccountModel(input_dim=self.openai_dim, output_dim=self.node2vec_dim)
+    # def load_avg_post_to_account_model(self): ... (古いメソッドを削除)
+    def load_dcor_filtered_avg_to_account_model(self):
+        # 正しいクラス (ここで定義した新しい構造) を使う
+        # Dropout率はモデル定義のデフォルト値(0.2)が使われるが、もし学習時と異なる値を使いたい場合は、
+        # ここで DcorFilteredAvgPostToAccountModel の引数に dropout を指定する必要がある。
+        # ユーザー提供の学習コードでは DROPOUT_RATE = 0.2 だったので、デフォルトで問題ないはず。
+        model = DcorFilteredAvgPostToAccountModel(input_dim=self.openai_dim, output_dim=self.node2vec_dim)
         try:
-            model.load_state_dict(torch.load(self.avg_post_to_account_model_path, map_location=self.device))
+            # model.load_state_dict(torch.load(self.avg_post_to_account_model_path, map_location=self.device)) # 古いパス
+            model.load_state_dict(torch.load(self.dcor_model_path, map_location=self.device)) # 新しいパス
             model = model.to(self.device)
             model.eval()
-            self.stdout.write(self.style.SUCCESS(f"Loaded AvgPostToAccountModel from {self.avg_post_to_account_model_path}"))
+            # self.stdout.write(self.style.SUCCESS(f"Loaded AvgPostToAccountModel from {self.avg_post_to_account_model_path}"))
+            self.stdout.write(self.style.SUCCESS(f"Loaded DcorFilteredAvgPostToAccountModel from {self.dcor_model_path}"))
             return model
-        except FileNotFoundError: self.stdout.write(self.style.ERROR(f"Model not found: {self.avg_post_to_account_model_path}")); return None
+        # except FileNotFoundError: self.stdout.write(self.style.ERROR(f"Model not found: {self.avg_post_to_account_model_path}")); return None
+        except FileNotFoundError: self.stdout.write(self.style.ERROR(f"Model not found: {self.dcor_model_path}")); return None
         except RuntimeError as e: # ★ state_dictミスマッチエラーを捕捉
              self.stdout.write(self.style.ERROR(f"Error loading state_dict (structure mismatch): {e}"))
-             self.stdout.write(self.style.WARNING("Ensure the AvgPostToAccountModel definition in create_bot_posts.py matches the saved model structure."))
+             # self.stdout.write(self.style.WARNING("Ensure the AvgPostToAccountModel definition in create_bot_posts.py matches the saved model structure."))
+             self.stdout.write(self.style.WARNING("Ensure the DcorFilteredAvgPostToAccountModel definition in create_bot_posts.py matches the saved model structure."))
              return None
-        except Exception as e: self.stdout.write(self.style.ERROR(f"Error loading AvgPostToAccountModel: {e}")); return None
+        # except Exception as e: self.stdout.write(self.style.ERROR(f"Error loading AvgPostToAccountModel: {e}")); return None
+        except Exception as e: self.stdout.write(self.style.ERROR(f"Error loading DcorFilteredAvgPostToAccountModel: {e}")); return None
 
     # (get_bot_user_objects, fetch_rss_summaries, get_openai_embedding, map_openai_to_account_vector, find_most_similar_bot, create_post_as_similar_bot, handle unchanged, but use self.* variables)
     def get_bot_user_objects(self):
@@ -176,14 +196,17 @@ class Command(BaseCommand):
         except Exception as e: self.stdout.write(self.style.ERROR(f"Error get OpenAI embed: {e}")); return None
 
     def map_openai_to_account_vector(self, openai_vector):
-        if self.avg_post_to_account_model is None or openai_vector is None: return None
+        # if self.avg_post_to_account_model is None or openai_vector is None: return None # 古いモデル変数
+        if self.dcor_filtered_avg_to_account_model is None or openai_vector is None: return None # 新しいモデル変数
         if openai_vector.shape[0] != self.openai_dim: self.stdout.write(self.style.ERROR(f"Input vector dim mismatch.")); return None
         try:
             with torch.no_grad():
                 tensor = torch.tensor(openai_vector, dtype=torch.float32).unsqueeze(0).to(self.device)
-                output = self.avg_post_to_account_model(tensor)
+                # output = self.avg_post_to_account_model(tensor) # 古いモデル呼び出し
+                output = self.dcor_filtered_avg_to_account_model(tensor) # 新しいモデル呼び出し
                 return output.squeeze(0).cpu().numpy()
-        except Exception as e: self.stdout.write(self.style.ERROR(f"Error applying AvgPostToAccountModel: {e}")); return None
+        # except Exception as e: self.stdout.write(self.style.ERROR(f"Error applying AvgPostToAccountModel: {e}")); return None
+        except Exception as e: self.stdout.write(self.style.ERROR(f"Error applying DcorFilteredAvgPostToAccountModel: {e}")); return None
 
     def find_most_similar_bot(self, target_account_vector, bot_user_objects):
         if target_account_vector is None or not bot_user_objects: return None
@@ -229,9 +252,9 @@ class Command(BaseCommand):
 
 
     def handle(self, *args, **options):
-        self.stdout.write(self.style.NOTICE("Starting bot posting process (Using AvgPostToAccountModel - Simple Structure)..."))
+        self.stdout.write(self.style.NOTICE("Starting bot posting process (Using DcorFilteredAvgPostToAccountModel)..."))
         if not self.openai_available: self.stdout.write(self.style.ERROR("OpenAI key not available.")); return
-        if not self.avg_post_to_account_model: self.stdout.write(self.style.ERROR("AvgPostToAccountModel not loaded.")); return
+        if not self.dcor_filtered_avg_to_account_model: self.stdout.write(self.style.ERROR("DcorFilteredAvgPostToAccountModel not loaded.")); return
         if not self.bot_users: self.stdout.write(self.style.ERROR("No valid bot accounts available.")); return
 
         unique_bot_usernames = list(set(BOT_ACCOUNT_USERNAMES)); required_bot_count = len(unique_bot_usernames)

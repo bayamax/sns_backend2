@@ -39,24 +39,46 @@ BOT_ACCOUNT_USERNAMES = [
 # ハードコードする設定値
 HARDCODED_OPENAI_DIM = 3072
 HARDCODED_NODE2VEC_DIM = 128
-HARDCODED_AVG_POST_TO_ACCOUNT_MODEL_PATH = 'recommendations/pretrained/avg_post_to_account_model.pt'
+# HARDCODED_AVG_POST_TO_ACCOUNT_MODEL_PATH = 'recommendations/pretrained/avg_post_to_account_model.pt' # 古いパス
+HARDCODED_DCOR_MODEL_PATH = '/Users/oobayashikoushin/Desktop/test/sns_backend/recommendations/pretrained/dcor_filtered_avg_to_account_model.pt' # 新しいパス
 
-# モデル定義 (シンプルな Sequential 構造)
-class AvgPostToAccountModel(nn.Module):
-    def __init__(self, input_dim, output_dim, dropout=0.2):
-        super(AvgPostToAccountModel, self).__init__()
+# モデル定義 (古いものは削除し、新しいものを追加)
+# class AvgPostToAccountModel(nn.Module): ... (削除)
+
+class ResidualBlock(nn.Module):
+    def __init__(self, input_dim, output_dim, dropout):
+        super().__init__()
+        self.block = nn.Sequential(
+            nn.Linear(input_dim, output_dim),
+            nn.LayerNorm(output_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout)
+        )
+        if input_dim != output_dim:
+            self.shortcut = nn.Linear(input_dim, output_dim)
+        else:
+            self.shortcut = nn.Identity()
+    def forward(self, x):
+        return self.block(x) + self.shortcut(x)
+
+class DcorFilteredAvgPostToAccountModel(nn.Module):
+    # input_dim, output_dim は __init__ で渡される
+    # dropout のデフォルト値はユーザー提供の学習コードからDROPOUT_RATE = 0.2 を想定
+    def __init__(self, input_dim=HARDCODED_OPENAI_DIM, output_dim=HARDCODED_NODE2VEC_DIM, dropout=0.2):
+        super().__init__()
         self.model = nn.Sequential(
-            nn.Linear(input_dim, 1024), nn.LayerNorm(1024), nn.ReLU(), nn.Dropout(dropout),
-            nn.Linear(1024, 512), nn.LayerNorm(512), nn.ReLU(), nn.Dropout(dropout),
-            nn.Linear(512, 256), nn.LayerNorm(256), nn.ReLU(), nn.Dropout(dropout),
+            ResidualBlock(input_dim, 1024, dropout),
+            ResidualBlock(1024, 512, dropout),
+            ResidualBlock(512, 256, dropout),
             nn.Linear(256, output_dim)
         )
-    def forward(self, x): return self.model(x)
+    def forward(self, x):
+        return self.model(x)
 
 User = get_user_model()
 
 class Command(BaseCommand):
-    help = 'Generates user Node2Vec vectors from averaged post OpenAI embeddings using AvgPostToAccountModel, excluding bots.'
+    help = 'Generates user Node2Vec vectors from averaged post OpenAI embeddings using DcorFilteredAvgPostToAccountModel, excluding bots.' # help メッセージ更新
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -75,11 +97,13 @@ class Command(BaseCommand):
         # インスタンス変数として設定値を保持
         self.openai_dim = HARDCODED_OPENAI_DIM
         self.node2vec_dim = HARDCODED_NODE2VEC_DIM
-        self.avg_post_to_account_model_path = HARDCODED_AVG_POST_TO_ACCOUNT_MODEL_PATH
+        # self.avg_post_to_account_model_path = HARDCODED_AVG_POST_TO_ACCOUNT_MODEL_PATH # 古いパス変数
+        self.dcor_model_path = HARDCODED_DCOR_MODEL_PATH # 新しいパス変数
         # モデルロードは handle 内で行うか、ここでロードするか選択可能
         # ここでロードする場合は get_device も __init__ で呼ぶ
         self.device = self.get_device()
-        self.avg_post_to_account_model = self.load_avg_post_to_account_model()
+        # self.avg_post_to_account_model = self.load_avg_post_to_account_model() # 古いモデルロード呼び出し
+        self.dcor_filtered_avg_to_account_model = self.load_dcor_filtered_avg_to_account_model() # 新しいモデルロード呼び出し
 
     def get_device(self):
         if torch.cuda.is_available(): return torch.device("cuda")
@@ -88,28 +112,38 @@ class Command(BaseCommand):
             except Exception: pass
         return torch.device("cpu")
 
-    def load_avg_post_to_account_model(self):
-        model = AvgPostToAccountModel(input_dim=self.openai_dim, output_dim=self.node2vec_dim)
+    # def load_avg_post_to_account_model(self): ... (古いメソッドを削除)
+    def load_dcor_filtered_avg_to_account_model(self):
+        # model = AvgPostToAccountModel(input_dim=self.openai_dim, output_dim=self.node2vec_dim) # 古いクラス
+        model = DcorFilteredAvgPostToAccountModel(input_dim=self.openai_dim, output_dim=self.node2vec_dim) # 新しいクラス
         try:
-            model.load_state_dict(torch.load(self.avg_post_to_account_model_path, map_location=self.device))
+            # model.load_state_dict(torch.load(self.avg_post_to_account_model_path, map_location=self.device)) # 古いパス
+            model.load_state_dict(torch.load(self.dcor_model_path, map_location=self.device)) # 新しいパス
             model = model.to(self.device)
             model.eval()
-            self.stdout.write(self.style.SUCCESS(f"Loaded AvgPostToAccountModel from {self.avg_post_to_account_model_path}"))
+            # self.stdout.write(self.style.SUCCESS(f"Loaded AvgPostToAccountModel from {self.avg_post_to_account_model_path}"))
+            self.stdout.write(self.style.SUCCESS(f"Loaded DcorFilteredAvgPostToAccountModel from {self.dcor_model_path}"))
             return model
-        except FileNotFoundError: self.stdout.write(self.style.ERROR(f"Model not found: {self.avg_post_to_account_model_path}")); return None
+        # except FileNotFoundError: self.stdout.write(self.style.ERROR(f"Model not found: {self.avg_post_to_account_model_path}")); return None
+        except FileNotFoundError: self.stdout.write(self.style.ERROR(f"Model not found: {self.dcor_model_path}")); return None
         except RuntimeError as e:
              self.stdout.write(self.style.ERROR(f"Error loading state_dict: {e}"))
-             self.stdout.write(self.style.WARNING("Ensure model definition matches saved file."))
+             # self.stdout.write(self.style.WARNING("Ensure model definition matches saved file."))
+             self.stdout.write(self.style.WARNING("Ensure DcorFilteredAvgPostToAccountModel definition matches saved file."))
              return None
-        except Exception as e: self.stdout.write(self.style.ERROR(f"Error loading AvgPostToAccountModel: {e}")); return None
+        # except Exception as e: self.stdout.write(self.style.ERROR(f"Error loading AvgPostToAccountModel: {e}")); return None
+        except Exception as e: self.stdout.write(self.style.ERROR(f"Error loading DcorFilteredAvgPostToAccountModel: {e}")); return None
 
 
     def handle(self, *args, **options):
         force = options.get('force', False)
         user_id = options.get('user_id')
 
-        if not self.avg_post_to_account_model:
-             self.stdout.write(self.style.ERROR("AvgPostToAccountModel not loaded. Cannot generate Node2Vec vectors. Exiting."))
+        # if not self.avg_post_to_account_model: # 古いモデルチェック
+        #      self.stdout.write(self.style.ERROR("AvgPostToAccountModel not loaded. Cannot generate Node2Vec vectors. Exiting."))
+        #      return
+        if not self.dcor_filtered_avg_to_account_model: # 新しいモデルチェック
+             self.stdout.write(self.style.ERROR("DcorFilteredAvgPostToAccountModel not loaded. Cannot generate Node2Vec vectors. Exiting."))
              return
 
         # 対象ユーザーを取得 (ボットを除外)
@@ -161,7 +195,8 @@ class Command(BaseCommand):
                 try:
                     with torch.no_grad():
                         input_tensor = torch.tensor(avg_post_openai_vector, dtype=torch.float32).unsqueeze(0).to(self.device)
-                        output_tensor = self.avg_post_to_account_model(input_tensor)
+                        # output_tensor = self.avg_post_to_account_model(input_tensor) # 古いモデル呼び出し
+                        output_tensor = self.dcor_filtered_avg_to_account_model(input_tensor) # 新しいモデル呼び出し
                         predicted_node2vec_vector = output_tensor.squeeze(0).cpu().numpy()
                 except Exception as model_e:
                     self.stdout.write(self.style.ERROR(f"Error applying model for user {user.id}: {model_e}"))
