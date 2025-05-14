@@ -7,7 +7,7 @@ import torch.nn as nn
 from tqdm import tqdm
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
-# from django.conf import settings # settings は使わない
+from django.conf import settings # settingsをインポート
 from django.db.models import Q
 from sklearn.metrics.pairwise import cosine_similarity
 import re # 正規表現をインポート
@@ -40,7 +40,8 @@ BOT_ACCOUNT_USERNAMES = [
 HARDCODED_OPENAI_DIM = 3072
 HARDCODED_NODE2VEC_DIM = 128
 # HARDCODED_AVG_POST_TO_ACCOUNT_MODEL_PATH = 'recommendations/pretrained/avg_post_to_account_model.pt' # 古いパス
-HARDCODED_DCOR_MODEL_PATH = '/Users/oobayashikoushin/Desktop/test/sns_backend/recommendations/pretrained/dcor_filtered_avg_to_account_model.pt' # 新しいパス
+# HARDCODED_DCOR_MODEL_PATH = '/Users/oobayashikoushin/Desktop/test/sns_backend/recommendations/pretrained/dcor_filtered_avg_to_account_model.pt' # 古い絶対パス
+HARDCODED_DCOR_MODEL_PATH = os.path.join(settings.BASE_DIR, 'recommendations', 'pretrained', 'dcor_filtered_avg_to_account_model.pt') # settings.BASE_DIR を使ったパス
 
 # モデル定義 (古いものは削除し、新しいものを追加)
 # class AvgPostToAccountModel(nn.Module): ... (削除)

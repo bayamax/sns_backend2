@@ -7,8 +7,9 @@ import openai # openai v0.28 を想定
 import time
 import re
 import random
+import os # osモジュールをインポート
 from django.core.management.base import BaseCommand
-# from django.conf import settings # ← settings のインポートを削除（またはコメントアウト）
+from django.conf import settings # settingsをインポート
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 from sklearn.metrics.pairwise import cosine_similarity
@@ -54,7 +55,7 @@ HARDCODED_POST_IDENTIFIER_PREFIX = '【Bot News】'
 HARDCODED_OPENAI_DIM = 3072
 HARDCODED_NODE2VEC_DIM = 128
 # HARDCODED_AVG_POST_TO_ACCOUNT_MODEL_PATH = 'recommendations/pretrained/avg_post_to_account_model.pt' # 古いパスをコメントアウトまたは削除
-HARDCODED_DCOR_MODEL_PATH = '/Users/oobayashikoushin/Desktop/test/sns_backend/recommendations/pretrained/dcor_filtered_avg_to_account_model.pt' # 新しいモデルパス
+HARDCODED_DCOR_MODEL_PATH = os.path.join(settings.BASE_DIR, 'recommendations', 'pretrained', 'dcor_filtered_avg_to_account_model.pt') # settings.BASE_DIR を使ったパス
 HARDCODED_PROCESS_ITEM_LIMIT = 10
 # -----------------------------------
 
