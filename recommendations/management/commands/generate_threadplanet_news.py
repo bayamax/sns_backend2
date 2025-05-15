@@ -306,7 +306,7 @@ class Command(BaseCommand):
         global_bot_user = self.get_global_news_bot_user()
         if not global_bot_user: self.stdout.write(self.style.WARNING("Global news bot not found.")); return
 
-        users_to_process = User.objects.filter(userembedding__node2vec_vector__isnull=False, is_staff=False, is_superuser=False).exclude(username__startswith=NEWS_BOT_PREFIX).distinct()[:2] # Botとadmin以外、2名に制限
+        users_to_process = User.objects.filter(embedding__node2vec_vector__isnull=False, is_staff=False, is_superuser=False).exclude(username__startswith=NEWS_BOT_PREFIX).distinct()[:2] # Botとadmin以外、2名に制限
         
         if not users_to_process.exists(): self.stdout.write(self.style.WARNING("No target users found.")); return
         self.stdout.write(self.style.NOTICE(f"Found {users_to_process.count()} users with account vectors to process."))
