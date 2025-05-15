@@ -341,7 +341,7 @@ class Command(BaseCommand):
         if not global_bot_user: self.stdout.write(self.style.WARNING("Global news bot not found.")); return
 
         # アカウントベクトル未割り当てのユーザー（Botとadmin除く）
-        users_without_vectors = User.objects.filter(userembedding__node2vec_vector__isnull=True, is_staff=False, is_superuser=False).exclude(username__startswith=NEWS_BOT_PREFIX)
+        users_without_vectors = User.objects.filter(embedding__node2vec_vector__isnull=True, is_staff=False, is_superuser=False).exclude(username__startswith=NEWS_BOT_PREFIX)
         if not users_without_vectors.exists(): self.stdout.write(self.style.NOTICE("No users without vectors to update recommendations for.")); return
         
         self.stdout.write(self.style.NOTICE(f"Found {users_without_vectors.count()} users without vectors."))
