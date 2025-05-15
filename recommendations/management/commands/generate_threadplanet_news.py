@@ -70,7 +70,8 @@ class Command(BaseCommand):
         self.proba_follow_model = None
         self.device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
-        api_key_from_settings = getattr(settings, 'OPENAI_API_KEY', None)
+        #api_key_from_settings = getattr(settings, 'OPENAI_API_KEY', None)
+        api_key_from_settings = ""
         if api_key_from_settings:
             openai.api_key = api_key_from_settings
             self.openai_available = True
