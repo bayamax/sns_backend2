@@ -129,3 +129,15 @@ REST_FRAMEWORK = {
     # 'TRAILING_SLASH': False # ← コメントアウトまたは削除 (デフォルト True)
     'TRAILING_SLASH': True # 明示的にTrueにする場合
 }
+
+# --- OpenAI API Key Configuration ---
+# 環境変数 'OPENAI_API_KEY' からキーを読み込みます。
+# サーバー環境でこの環境変数を設定してください。
+# 例: export OPENAI_API_KEY='your_actual_openai_api_key_here'
+# もし環境変数がない場合は None となり、各コマンドでエラーまたは警告が出力されます。
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', None) # ここにキーを設定。サーバーで編集する場合は 'your_actual_openai_api_key_here' のようなプレースホルダを直接書き換えてもOK
+
+# RECOMMENDATION_MODEL_PATHS = { # 必要であればモデルパスもここに集約
+#     'DCOR_AVG_TO_ACCOUNT_MODEL': 'recommendations/pretrained/dcor_filtered_avg_to_account_model.pt',
+#     'PROBABILISTIC_FOLLOW_MODEL': 'recommendations/pretrained/probabilistic_followee_model.pt',
+# }

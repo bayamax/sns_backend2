@@ -27,8 +27,14 @@ class Command(BaseCommand):
         force = options.get('force', False)
         limit = options.get('limit')
         
-        # APIキーを直接設定 (以下の行を変更)
-        openai.api_key = "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"
+        # APIキーをsettingsから取得するように修正
+        # openai.api_key = "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"
+        api_key_from_settings = getattr(settings, 'OPENAI_API_KEY', None)
+        if api_key_from_settings:
+            openai.api_key = api_key_from_settings
+        else:
+            self.stdout.write(self.style.ERROR("OpenAI API key not found in Django settings or environment variables. Cannot proceed."))
+            return # APIキーがない場合は処理を中断
         
         # 埋め込みベクトルがまだないポストを取得
         if force:

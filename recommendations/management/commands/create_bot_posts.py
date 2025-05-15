@@ -113,9 +113,15 @@ class Command(BaseCommand):
 
         # self.avg_post_to_account_model = self.load_avg_post_to_account_model() # 古いモデル読み込み
         self.dcor_filtered_avg_to_account_model = self.load_dcor_filtered_avg_to_account_model() # 新しいモデル読み込み
-        hardcoded_api_key = "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"
-        if hardcoded_api_key: openai.api_key = hardcoded_api_key; self.openai_available = True
-        else: self.stdout.write(self.style.ERROR("OpenAI API key missing.")); self.openai_available = False
+        
+        # OpenAI APIキーをsettingsから取得するように修正
+        api_key_from_settings = getattr(settings, 'OPENAI_API_KEY', None)
+        if api_key_from_settings:
+            openai.api_key = api_key_from_settings
+            self.openai_available = True
+        else:
+            self.stdout.write(self.style.ERROR("OpenAI API key not found in Django settings or environment variables."))
+            self.openai_available = False
         self.bot_users = self.get_bot_user_objects()
         if not self.bot_users: self.stdout.write(self.style.ERROR("No valid bot accounts found."))
 
