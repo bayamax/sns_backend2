@@ -4,6 +4,7 @@ import random
 import numpy as np
 import torch
 import torch.nn as nn # DcorFilteredAvgPostToAccountModel のために追加
+import os # os モジュールをインポート
 from sklearn.metrics.pairwise import cosine_similarity
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
