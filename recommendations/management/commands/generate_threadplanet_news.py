@@ -12,7 +12,7 @@ from django.conf import settings
 from posts.models import Post
 from recommendations.models import UserEmbedding
 from recommendations.ml_models import ProbabilisticFollowPredictor # ProbabilisticFollowPredictor をインポート
-# from pytrends.request import TrendReq
+import feedparser # feedparser をインポート
 
 User = get_user_model()
 
@@ -129,66 +129,29 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(f"Global news bot user '{GLOBAL_NEWS_BOT_USERNAME}' not found. Please create this user."))
             return None
 
-    #def get_trending_keywords(self):
-        #self.stdout.write(self.style.NOTICE("Fetching trending keywords (pytrends or dummy)..."))
-        #try:
-            #from pytrends.request import TrendReq
-            #pytrends = TrendReq(hl='ja-JP', tz=360)
-            #trending_searches_df = pytrends.trending_searches(pn='japan')
-            #if trending_searches_df is None or trending_searches_df.empty:
-                #self.stdout.write(self.style.WARNING("No trending keywords found from pytrends."))
-                #return []
-            #keywords = trending_searches_df[0].tolist()[:3]
-            #if not keywords:
-                #self.stdout.write(self.style.WARNING("Trending keywords list is empty after processing."))
-                #return []
-            #self.stdout.write(self.style.SUCCESS(f"Found keywords from pytrends: {', '.join(keywords)}"))
-            #return keywords
-        #except ImportError:
-            #self.stdout.write(self.style.ERROR("pytrends library is not installed. Falling back to dummy keywords."))
-        #except Exception as e:
-            #self.stdout.write(self.style.ERROR(f"Error fetching trends from pytrends: {e}. Falling back to dummy keywords."))
-        #dummy_keywords = ["AIの最新動向", "再生可能エネルギー", "メタバースの今後"]
-        #self.stdout.write(self.style.SUCCESS(f"Using dummy keywords: {', '.join(dummy_keywords)}"))
-        #return dummy_keywords
     def get_trending_keywords(self):
-        self.stdout.write(self.style.NOTICE("Fetching trending keywords (pytrends or dummy)..."))
+        self.stdout.write(self.style.NOTICE("Fetching trending keywords (RSS Feed)..."))
+        RSS_FEED_URL = "https://trends.google.co.jp/trends/trendingsearches/daily/rss?geo=JP"
         try:
-            import feedparser                         # ❶ ここはそのまま使う
-            url = "https://trends.google.co.jp/trends/trendingsearches/daily/rss?geo=JP"
-
-            from pytrends.request import TrendReq
-            pytrends = TrendReq(hl='ja-JP', tz=360)
-            trending_searches_df = pytrends.trending_searches(pn='japan')
-
-            #---------- pytrends 判定 ----------
-            if trending_searches_df is not None and not trending_searches_df.empty:
-                keywords = trending_searches_df[0].tolist()[:3]
-                if keywords:
-                    self.stdout.write(self.style.SUCCESS(
-                        f"Found keywords from pytrends: {', '.join(keywords)}"))
+            # feedparser はクラスの先頭でimportしているので、ここでのimportは不要
+            feed = feedparser.parse(RSS_FEED_URL)
+            if not feed.entries:
+                self.stdout.write(self.style.WARNING("No trending keywords found from RSS feed. Falling back to dummy keywords."))
+                # Fall through to dummy keywords
+            else:
+                keywords = [entry.title for entry in feed.entries[:3]]
+                if not keywords:
+                    self.stdout.write(self.style.WARNING("Trending keywords list is empty after processing RSS feed. Falling back to dummy keywords."))
+                    # Fall through to dummy keywords
+                else:
+                    self.stdout.write(self.style.SUCCESS(f"Found keywords from RSS feed: {', '.join(keywords)}"))
                     return keywords
-            self.stdout.write(self.style.WARNING(
-                "No trending keywords found from pytrends. Falling back to RSS."))
-
-            #---------- ❷ RSS フォールバック ----------
-            feed = feedparser.parse(url)
-            rss_keywords = [e.title for e in feed.entries][:3]
-            if rss_keywords:
-                self.stdout.write(self.style.SUCCESS(
-                    f"Found keywords from RSS: {', '.join(rss_keywords)}"))
-                return rss_keywords
-            self.stdout.write(self.style.WARNING(
-                "RSS returned no keywords. Falling back to dummy."))
-
-        except ImportError:
-            self.stdout.write(self.style.ERROR(
-                "pytrends or feedparser not installed. Falling back to dummy keywords."))
+        except ImportError: # feedparser がない場合
+            self.stdout.write(self.style.ERROR("feedparser library is not installed. Falling back to dummy keywords."))
         except Exception as e:
-            self.stdout.write(self.style.ERROR(
-                f"Error fetching trends: {e}. Falling back to dummy keywords."))
-
-        #---------- ❸ ダミー ----------
+            self.stdout.write(self.style.ERROR(f"Error fetching trends from RSS feed: {e}. Falling back to dummy keywords."))
+        
+        # Fallback to dummy keywords
         dummy_keywords = ["AIの最新動向", "再生可能エネルギー", "メタバースの今後"]
         self.stdout.write(self.style.SUCCESS(
             f"Using dummy keywords: {', '.join(dummy_keywords)}"))
