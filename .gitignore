@@ -92,4 +92,4 @@ dmypy.json
 .pytype/
 
 # Cython cache files
-*.pyxbld 
+*.pyxbld recommendations/pretrained/attention_pooling_follow_model.pt
