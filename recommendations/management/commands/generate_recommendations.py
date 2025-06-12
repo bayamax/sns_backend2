@@ -552,4 +552,3 @@ def generate_recommendations(self, device, model, top_k):
     self.log(f"🎯 フォロー推薦計算完了")
     self.log(f"📊 結果: 総推薦数={total_recommendations}, エラーユーザー数={error_users}")
     self.log(f"💾 処理後メモリ使用量: {self.get_memory_usage()}")
-```
