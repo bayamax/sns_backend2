@@ -7,15 +7,24 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 from .views import (
-    RegisterView, LoginView, UserProfileView, 
-    FollowView, NotificationView, FollowStatusView,
-    FollowersListView, FollowingListView, AccountDeleteView,
-    BlockUserView, BlockedUsersListView
+    RegisterView,
+    LoginView,
+    AppleLoginView,
+    UserProfileView,
+    FollowView,
+    NotificationView,
+    FollowStatusView,
+    FollowersListView,
+    FollowingListView,
+    AccountDeleteView,
+    BlockUserView,
+    BlockedUsersListView,
 )
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),
     path('login/', LoginView.as_view(), name='login'),
+    path('apple-login/', AppleLoginView.as_view(), name='apple-login'),
     # simplejwt のトークン取得・リフレッシュ用エンドポイントを追加
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
