@@ -92,3 +92,4 @@ dmypy.json
 .pytype/
 
 # Cython cache files
+.DS_Store
