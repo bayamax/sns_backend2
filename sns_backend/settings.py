@@ -35,6 +35,11 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sites',
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.apple',
     'rest_framework',
     'accounts',
     'posts',
@@ -141,3 +146,31 @@ OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', None) # ここにキーを設�
 #     'DCOR_AVG_TO_ACCOUNT_MODEL': 'recommendations/pretrained/dcor_filtered_avg_to_account_model.pt',
 #     'PROBABILISTIC_FOLLOW_MODEL': 'recommendations/pretrained/probabilistic_followee_model.pt',
 # }
+
+# django-allauth 用追加設定
+# SITE_ID は django.contrib.sites に必要
+SITE_ID = 1
+
+# 認証バックエンドに allauth を追加
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',  # デフォルト
+    'allauth.account.auth_backends.AuthenticationBackend',
+]
+
+# allauth オプション
+ACCOUNT_EMAIL_REQUIRED = False
+ACCOUNT_USERNAME_REQUIRED = True
+ACCOUNT_AUTHENTICATION_METHOD = 'username'
+ACCOUNT_EMAIL_VERIFICATION = 'none'
+
+# Apple プロバイダの設定
+SOCIALACCOUNT_PROVIDERS = {
+    "apple": {
+        "APP": {
+            "client_id": os.environ.get("APPLE_CLIENT_ID"),
+            "team_id": os.environ.get("APPLE_TEAM_ID"),
+            "key": os.environ.get("APPLE_KEY_ID"),
+            "secret": os.environ.get("APPLE_PRIVATE_KEY"),
+        }
+    }
+}

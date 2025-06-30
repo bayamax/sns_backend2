@@ -8,6 +8,7 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
+    path('auth/', include('allauth.urls')),
 ]
 
 # 静的ファイルの設定（本番環境でも適用）
