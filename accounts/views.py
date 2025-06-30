@@ -1,11 +1,20 @@
 # accounts/views.py
 
+import os
 from rest_framework import status, permissions, generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
-from .serializers import UserSerializer, RegisterSerializer, LoginSerializer, UserProfileSerializer, UserListSerializer
+from .serializers import (
+    UserSerializer,
+    RegisterSerializer,
+    LoginSerializer,
+    UserProfileSerializer,
+    UserListSerializer,
+    AppleLoginSerializer,
+)
+from .utils import verify_apple_identity_token
 from notifications.serializers import NotificationSerializer
 from .models import Follow, User, Block
 from notifications.models import Notification
@@ -56,6 +65,42 @@ class LoginView(APIView):
             
             return Response(response_data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AppleLoginView(APIView):
+    """Apple IDを使用したログインビュー"""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = AppleLoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        identity_token = serializer.validated_data["identity_token"]
+        username = serializer.validated_data.get("username")
+
+        try:
+            claims = verify_apple_identity_token(
+                identity_token, audience=os.environ.get("APPLE_CLIENT_ID")
+            )
+        except Exception as e:
+            return Response({"detail": "Invalid identity token", "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        apple_sub = claims.get("sub")
+        email = claims.get("email")
+
+        if not apple_sub:
+            return Response({"detail": "Invalid Apple token"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user, created = User.objects.get_or_create(
+            username=username or f"apple_{apple_sub}",
+            defaults={"email": email or ""},
+        )
+
+        refresh = RefreshToken.for_user(user)
+        user_data = UserSerializer(user, context={"request": request}).data
+        user_data["token"] = str(refresh.access_token)
+        return Response(user_data)
 
 class UserProfileView(APIView):
     """ユーザープロフィールビュー"""

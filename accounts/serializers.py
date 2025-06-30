@@ -238,3 +238,9 @@ class UserListSerializer(serializers.ModelSerializer):
     def get_following_count(self, obj):
         return Follow.objects.filter(follower=obj).count()
 
+
+class AppleLoginSerializer(serializers.Serializer):
+    """Apple ID ログイン用シリアライザー"""
+    identity_token = serializers.CharField()
+    username = serializers.CharField(required=False, allow_blank=True)
+
