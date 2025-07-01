@@ -20,11 +20,13 @@ from .views import (
     BlockUserView,
     BlockedUsersListView,
 )
+from .views_apple import AppleLoginJWT
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),
     path('login/', LoginView.as_view(), name='login'),
     path('apple-login/', AppleLoginView.as_view(), name='apple-login'),
+    path('apple/login/', AppleLoginJWT.as_view(), name='apple-login-jwt'),
     # simplejwt のトークン取得・リフレッシュ用エンドポイントを追加
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
