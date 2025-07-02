@@ -3,6 +3,7 @@ from rest_framework import status, permissions
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 import os
+from jose import jwt  # for debug pre-check
 
 from django.contrib.auth import get_user_model
 
@@ -43,6 +44,16 @@ class AppleLoginJWT(APIView):
             os.environ.get("APPLE_CLIENT_ID"),   # Service ID (Web フロー)
             os.environ.get("APPLE_BUNDLE_ID"),  # iOS アプリの Bundle ID (ネイティブ)
         ]))
+
+        # ---- Debug: トークンの aud を検証前に表示 ----
+        try:
+            unverified_claims = jwt.get_unverified_claims(identity_token)
+            print("Apple login pre-check --------------")
+            print("token aud =", unverified_claims.get("aud"))
+            print("allowed_audiences =", allowed_audiences)
+            print("-------------------------------------")
+        except Exception as dbg_e:
+            print("[Debug] unable to decode unverified claims:", dbg_e)
 
         # python-jose は audience に list を渡すとエラーになるため
         # 要素が 1 つのときだけ文字列で渡し、複数ある場合は None にして後で手動検証する
