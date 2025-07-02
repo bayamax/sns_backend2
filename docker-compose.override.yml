@@ -1,0 +1,14 @@
+services:
+  web:
+    environment:
+      APPLE_CLIENT_ID: "org.daenishi.service"
+      APPLE_BUNDLE_ID: "Enishi.enishi-Enishi.enishi"
+      APPLE_TEAM_ID: "55Z2N5X2Z6"
+      APPLE_KEY_ID: "VJBP7B8TUJ"
+      APPLE_PRIVATE_KEY: |
+        -----BEGIN PRIVATE KEY-----
+        MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgm2TWRDef93JUf7ef
+        AeREN7Fx3bdLBmSYyTLb/vysFzagCgYIKoZIzj0DAQehRANCAATZx7wjDnkgexWZ
+        Vxsi3fVe5bGc4BwFuzoLFZX+1mrZy/IpPEWcKkFnwn4hu2cWJmTeIUJ+hNS1A0dz
+        5fJNUWsJ
+        -----END PRIVATE KEY----- 
