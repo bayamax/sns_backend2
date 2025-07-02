@@ -25,7 +25,7 @@ def verify_apple_identity_token(token, audience):
     return jwt.decode(
         token,
         key,
-        algorithms=["RS256"],
+        algorithms=["ES256", "RS256"],  # Apple uses ES256 for identity tokens
         audience=audience,
         issuer="https://appleid.apple.com",
     )
