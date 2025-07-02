@@ -44,13 +44,24 @@ class AppleLoginJWT(APIView):
             os.environ.get("APPLE_BUNDLE_ID"),  # iOS アプリの Bundle ID (ネイティブ)
         ]))
 
+        # python-jose は audience に list を渡すとエラーになるため
+        # 要素が 1 つのときだけ文字列で渡し、複数ある場合は None にして後で手動検証する
+        if len(allowed_audiences) == 1:
+            audience_param = allowed_audiences[0]
+        else:
+            audience_param = None  # jose 側では検証しない
+
         try:
             claims = verify_apple_identity_token(
                 identity_token,
-                audience=allowed_audiences or None,  # 空リスト防止
+                audience=audience_param,
             )
         except Exception as e:
             return Response({"detail": "Invalid identity token", "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        # audience を手動検証（複数想定）
+        if allowed_audiences and claims.get("aud") not in allowed_audiences:
+            return Response({"detail": "Invalid audience", "error": f"aud={claims.get('aud')}"}, status=status.HTTP_400_BAD_REQUEST)
 
         apple_sub = claims.get("sub")
         email = claims.get("email")
