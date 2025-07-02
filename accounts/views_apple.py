@@ -56,6 +56,13 @@ class AppleLoginJWT(APIView):
                 identity_token,
                 audience=audience_param,
             )
+
+            # ---- Debug logs: remove after verification ----
+            print("Apple login debug --------------")
+            print("claims[aud] =", claims.get("aud"))
+            print("allowed_audiences =", allowed_audiences)
+            print("---------------------------------")
+
         except Exception as e:
             return Response({"detail": "Invalid identity token", "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
