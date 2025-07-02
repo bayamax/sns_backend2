@@ -22,10 +22,16 @@ def verify_apple_identity_token(token, audience):
     key = next((k for k in keys if k.get("kid") == kid), None)
     if not key:
         raise ValueError("Public key not found for Apple token")
+    options = {}
+    if audience is None:
+        # Skip audience verification explicitly when not provided
+        options["verify_aud"] = False
+
     return jwt.decode(
         token,
         key,
-        algorithms=["ES256", "RS256"],  # Apple uses ES256 for identity tokens
+        algorithms=["ES256", "RS256"],
         audience=audience,
         issuer="https://appleid.apple.com",
+        options=options,
     )
