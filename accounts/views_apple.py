@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 import os
 from jose import jwt  # for debug pre-check
+import logging
 
 from django.contrib.auth import get_user_model
 
@@ -11,6 +12,7 @@ from .serializers import UserSerializer
 from .utils import verify_apple_identity_token
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 class AppleLoginJWT(APIView):
@@ -48,12 +50,12 @@ class AppleLoginJWT(APIView):
         # ---- Debug: トークンの aud を検証前に表示 ----
         try:
             unverified_claims = jwt.get_unverified_claims(identity_token)
-            print("Apple login pre-check --------------")
-            print("token aud =", unverified_claims.get("aud"))
-            print("allowed_audiences =", allowed_audiences)
-            print("-------------------------------------")
+            logger.error("Apple login pre-check --------------")
+            logger.error("token aud = %s", unverified_claims.get("aud"))
+            logger.error("allowed_audiences = %s", allowed_audiences)
+            logger.error("-------------------------------------")
         except Exception as dbg_e:
-            print("[Debug] unable to decode unverified claims:", dbg_e)
+            logger.error("[Debug] unable to decode unverified claims: %s", dbg_e)
 
         # python-jose は audience に list を渡すとエラーになるため
         # 要素が 1 つのときだけ文字列で渡し、複数ある場合は None にして後で手動検証する
@@ -69,10 +71,10 @@ class AppleLoginJWT(APIView):
             )
 
             # ---- Debug logs: remove after verification ----
-            print("Apple login debug --------------")
-            print("claims[aud] =", claims.get("aud"))
-            print("allowed_audiences =", allowed_audiences)
-            print("---------------------------------")
+            logger.error("Apple login debug --------------")
+            logger.error("claims[aud] = %s", claims.get("aud"))
+            logger.error("allowed_audiences = %s", allowed_audiences)
+            logger.error("---------------------------------")
 
         except Exception as e:
             return Response({"detail": "Invalid identity token", "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
