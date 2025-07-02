@@ -153,13 +153,18 @@ ACCOUNT_AUTHENTICATION_METHOD = 'username'
 ACCOUNT_EMAIL_VERIFICATION = 'none'
 
 # Apple プロバイダの設定
+_APPLE_PRIVATE_KEY = os.environ.get("APPLE_PRIVATE_KEY")
+# 環境変数では改行を "\n" で表現している場合があるので実際の改行に戻す
+if _APPLE_PRIVATE_KEY and "\n" in _APPLE_PRIVATE_KEY:
+    _APPLE_PRIVATE_KEY = _APPLE_PRIVATE_KEY.replace("\\n", "\n")
+
 SOCIALACCOUNT_PROVIDERS = {
     "apple": {
         "APP": {
             "client_id": os.environ.get("APPLE_CLIENT_ID"),
             "team_id": os.environ.get("APPLE_TEAM_ID"),
             "key": os.environ.get("APPLE_KEY_ID"),
-            "secret": os.environ.get("APPLE_PRIVATE_KEY"),
+            "secret": _APPLE_PRIVATE_KEY,
         }
     }
 }
