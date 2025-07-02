@@ -63,6 +63,7 @@ staticfiles/ # collectstaticで生成されるファイル
 
 # Environments
 #.env # ★ 環境変数を安全に管理するため、これも無視 ★
+.env
 .venv # ★ 仮想環境フォルダ ★
 venv/
 ENV/

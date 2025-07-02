@@ -38,10 +38,16 @@ class AppleLoginJWT(APIView):
         if not identity_token:
             return Response({"detail": "`id_token` is required."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # iOS ネイティブの Sign-in では aud がバンドルID、Web フローでは Service ID になる
+        allowed_audiences = list(filter(None, [
+            os.environ.get("APPLE_CLIENT_ID"),   # Service ID (Web フロー)
+            os.environ.get("APPLE_BUNDLE_ID"),  # iOS アプリの Bundle ID (ネイティブ)
+        ]))
+
         try:
             claims = verify_apple_identity_token(
                 identity_token,
-                audience=os.environ.get("APPLE_CLIENT_ID"),
+                audience=allowed_audiences or None,  # 空リスト防止
             )
         except Exception as e:
             return Response({"detail": "Invalid identity token", "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
