@@ -37,6 +37,8 @@ class User(AbstractUser):
     created_at = models.DateTimeField(auto_now_add=True)
     # Apple サインイン専用アカウントかどうか
     is_apple_only = models.BooleanField(default=False)
+    # Apple Sign-In の sub（一意 ID）を保持し、再ログイン時のひも付けに使用
+    apple_sub = models.CharField(_('Apple Sub'), max_length=255, unique=True, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     objects = UserManager()

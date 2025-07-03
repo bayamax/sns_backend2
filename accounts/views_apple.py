@@ -88,8 +88,9 @@ class AppleLoginJWT(APIView):
         if not apple_sub:
             return Response({"detail": "Invalid Apple token"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Apple の sub は一意のIDなのでユーザー名に含めておく
-        default_username = f"apple_{apple_sub}"
+        # ---------------- ユーザー取得・作成 ----------------
+        # 1) apple_sub で既存ユーザーを検索
+        user = User.objects.filter(apple_sub=apple_sub).first()
 
         # 自動採番: user1, user2 ...
         def generate_username():
@@ -97,17 +98,27 @@ class AppleLoginJWT(APIView):
             next_num = (last.id + 1) if last else 1
             return f"user{next_num}"
 
-        user, created = User.objects.get_or_create(
-            username=username or default_username,
-            defaults={"email": email or ""},
-        )
+        # 2) 見つからなければ新規作成
+        if user is None:
+            # フロントが明示 username を送ってきた場合はそれを使うが、重複時は採番
+            base_username = username or generate_username()
+            new_username = base_username
+            while User.objects.filter(username=new_username).exists():
+                new_username = generate_username()
 
-        if created:
-            user.is_apple_only = True
+            user = User(
+                username=new_username,
+                email=email or "",
+                is_apple_only=True,
+                apple_sub=apple_sub,
+            )
             user.set_unusable_password()
-            if user.username.startswith("apple_"):
-                user.username = generate_username()
-            user.save(update_fields=["is_apple_only", "password", "username"])
+            user.save()
+        else:
+            # 既存ユーザーが email 未設定で今回取得できたら入れる
+            if email and not user.email:
+                user.email = email
+                user.save(update_fields=["email"])
 
         refresh = RefreshToken.for_user(user)
         access_token = refresh.access_token
