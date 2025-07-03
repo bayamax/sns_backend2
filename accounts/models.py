@@ -35,6 +35,8 @@ class User(AbstractUser):
     profile_image = models.ImageField(upload_to='profile_images/', blank=True, null=True)
     bio = models.TextField(_('自己紹介'), blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Apple サインイン専用アカウントかどうか
+    is_apple_only = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
     
     objects = UserManager()

@@ -90,10 +90,24 @@ class AppleLoginJWT(APIView):
 
         # Apple の sub は一意のIDなのでユーザー名に含めておく
         default_username = f"apple_{apple_sub}"
-        user, _ = User.objects.get_or_create(
+
+        # 自動採番: user1, user2 ...
+        def generate_username():
+            last = User.objects.order_by("-id").first()
+            next_num = (last.id + 1) if last else 1
+            return f"user{next_num}"
+
+        user, created = User.objects.get_or_create(
             username=username or default_username,
             defaults={"email": email or ""},
         )
+
+        if created:
+            user.is_apple_only = True
+            user.set_unusable_password()
+            if user.username.startswith("apple_"):
+                user.username = generate_username()
+            user.save(update_fields=["is_apple_only", "password", "username"])
 
         refresh = RefreshToken.for_user(user)
         access_token = refresh.access_token
@@ -101,6 +115,7 @@ class AppleLoginJWT(APIView):
         user_data = UserSerializer(user, context={"request": request}).data
 
         return Response({
-            "token": str(access_token),
+            "access": str(access_token),
+            "refresh": str(refresh),
             "user": user_data,
         }, status=status.HTTP_200_OK) 

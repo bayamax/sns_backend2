@@ -52,17 +52,18 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.validated_data['user']
-            
+
+            if getattr(user, 'is_apple_only', False):
+                return Response({"detail": "Use Sign in with Apple for this account."}, status=status.HTTP_400_BAD_REQUEST)
+
             refresh = RefreshToken.for_user(user)
-            
-            # UserSerializer を使ってユーザー情報を取得 (snake_case になる)
+
             user_data = UserSerializer(user, context={'request': request}).data
-            
-            # トークンを追加
+
             response_data = user_data
-            # キーを 'password' から 'token' に変更
-            response_data['token'] = str(refresh.access_token)
-            
+            response_data['access'] = str(refresh.access_token)
+            response_data['refresh'] = str(refresh)
+
             return Response(response_data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

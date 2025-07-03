@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from datetime import timedelta
 
 # プロジェクトのルートディレクトリパスを設定
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -122,6 +123,12 @@ REST_FRAMEWORK = {
     ],
     # 'TRAILING_SLASH': False # ← コメントアウトまたは削除 (デフォルト True)
     'TRAILING_SLASH': True # 明示的にTrueにする場合
+}
+
+# SimpleJWT lifetime settings
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=60),
 }
 
 # --- OpenAI API Key Configuration ---
