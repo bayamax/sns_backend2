@@ -87,3 +87,20 @@ class Block(models.Model):
 
     def __str__(self):
         return f"{self.blocker.username} blocked {self.blocked.username}"
+
+class UserSNS(models.Model):
+    """ユーザーがどのSNSタイプに属するかを管理するモデル。"""
+    SNS_TYPE_CHOICES = (
+        ('threadplanet', 'ThreadPlanet (従来版)'),
+        ('map', '位置情報SNS'),
+    )
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sns_type')
+    sns_type = models.CharField(max_length=20, choices=SNS_TYPE_CHOICES, default='map')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'ユーザーSNSタイプ'
+        verbose_name_plural = 'ユーザーSNSタイプ'
+ 
+    def __str__(self):
+        return f"{self.user.username} -> {self.get_sns_type_display()}"

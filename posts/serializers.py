@@ -1,7 +1,7 @@
 # posts/serializers.py
 
 from rest_framework import serializers
-from .models import Post, Like
+from .models import Post, Like, PostLocation
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -31,6 +31,7 @@ class PostSerializer(serializers.ModelSerializer):
     is_reply = serializers.SerializerMethodField()
     parent_post = serializers.PrimaryKeyRelatedField(read_only=True)
     is_from_followed_user = serializers.SerializerMethodField()
+    location = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
@@ -48,6 +49,7 @@ class PostSerializer(serializers.ModelSerializer):
             'is_reply',
             'parent_post',
             'is_from_followed_user',
+            'location',
         ]
         read_only_fields = fields
 
@@ -80,24 +82,50 @@ class PostSerializer(serializers.ModelSerializer):
     def get_is_from_followed_user(self, obj):
         return getattr(obj, 'is_from_followed_user', False)
 
+    def get_location(self, obj):
+        if hasattr(obj, 'post_location') and obj.post_location:
+            loc = obj.post_location
+            return {
+                'latitude': loc.latitude,
+                'longitude': loc.longitude,
+                'place_name': loc.place_name,
+            }
+        return None
+
 class PostCreateSerializer(serializers.ModelSerializer):
     """投稿作成シリアライザー"""
     parent_post = serializers.PrimaryKeyRelatedField(queryset=Post.objects.all(), required=False, allow_null=True)
-    
+    latitude = serializers.DecimalField(max_digits=9, decimal_places=6, required=False, write_only=True)
+    longitude = serializers.DecimalField(max_digits=9, decimal_places=6, required=False, write_only=True)
+    place_name = serializers.CharField(required=False, allow_blank=True, write_only=True)
+
     class Meta:
         model = Post
-        fields = ['content', 'parent_post']
+        fields = ['content', 'parent_post', 'latitude', 'longitude', 'place_name']
     
     def create(self, validated_data):
         user = self.context['request'].user
         parent_post = validated_data.get('parent_post')
         
+        latitude = validated_data.pop('latitude', None)
+        longitude = validated_data.pop('longitude', None)
+        place_name = validated_data.pop('place_name', '')
+
         # 新しい投稿を作成
         post = Post.objects.create(
             user=user,
             content=validated_data.get('content'),
             parent_post=parent_post
         )
+
+        # 位置情報が提供されている場合に PostLocation を作成
+        if latitude is not None and longitude is not None:
+            PostLocation.objects.create(
+                post=post,
+                latitude=latitude,
+                longitude=longitude,
+                place_name=place_name,
+            )
         
         # 親投稿がある場合、replies_countを増やす
         if parent_post:

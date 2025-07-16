@@ -67,3 +67,15 @@ class Report(models.Model):
 
     def __str__(self):
         return f"Report by {self.reporter.username} on post {self.reported_post.id}"
+
+
+class PostLocation(models.Model):
+    """投稿に紐づく位置情報を保持するモデル"""
+    post = models.OneToOneField(Post, on_delete=models.CASCADE, related_name='post_location')
+    latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    place_name = models.CharField(max_length=255, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Location({self.latitude}, {self.longitude}) for Post {self.post_id}"
