@@ -43,9 +43,9 @@ class TimelineView(APIView):
             )
             logger.info(f"Recommended user IDs: {recommended_user_ids}")
 
-            # フォロー中のユーザーと自分自身の投稿を取得するQオブジェクト
-            q_objects = Q(user=request.user) | Q(user_id__in=followed_user_ids)
-            logger.info(f"Initial Q object conditions: Following IDs {followed_user_ids} OR Self ID {request.user.id}")
+            # 全ユーザーの投稿を取得する（自分・フォロー限定ではなく）
+            q_objects = Q()  # すべての投稿を対象にする
+            logger.info("Initial Q object conditions: ALL users (no follow/self filtering)")
 
             # 全ての投稿をフィルタリング（親投稿のみ、ブロック関係除外）
             posts_query = Post.objects.filter(q_objects, parent_post__isnull=True)\
@@ -104,7 +104,8 @@ class TimelineView(APIView):
                 post.is_from_followed_user = False
                 logger.info(f"  Fetched Recommended Post ID: {post.id}, User ID: {post.user_id}, Blocked: {post.user_id in blocked_related_user_ids}, FromFollowed: {post.is_from_followed_user}")
 
-            serializer = PostSerializer(posts_list + recommended_posts_list, many=True, context={'request': request})
+            # すべての投稿のみを返却（おすすめ投稿は除外）
+            serializer = PostSerializer(posts_list, many=True, context={'request': request})
             logger.info(f"TimelineView successfully returning {len(serializer.data)} posts.")
             return Response(serializer.data)
 
