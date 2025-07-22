@@ -4,11 +4,12 @@ from django.urls import path
 from .views import (
     TimelineView, PostView, PostDetailView, 
     PostLikeView, PostCommentsView, UserPostsView, ChildCommentsView,
-    TestView, ReportPostView
+    TestView, ReportPostView, GlobalTimelineView
 )
 
 urlpatterns = [
     path('timeline/', TimelineView.as_view(), name='timeline'),
+    path('global/', GlobalTimelineView.as_view(), name='global-timeline'),
     path('users/', UserPostsView.as_view(), name='user-posts'),
     path('test/', TestView.as_view(), name='test-view'),
     path('user/<int:user_id>/', UserPostsView.as_view(), name='user-posts-by-id'),

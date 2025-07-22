@@ -43,9 +43,9 @@ class TimelineView(APIView):
             )
             logger.info(f"Recommended user IDs: {recommended_user_ids}")
 
-            # 全ユーザーの投稿を取得する（自分・フォロー限定ではなく）
-            q_objects = Q()  # すべての投稿を対象にする
-            logger.info("Initial Q object conditions: ALL users (no follow/self filtering)")
+            # フォロー中のユーザーと自分自身の投稿を取得するQオブジェクト（従来の挙動）
+            q_objects = Q(user=request.user) | Q(user_id__in=followed_user_ids)
+            logger.info(f"Initial Q object conditions: Following IDs {followed_user_ids} OR Self ID {request.user.id}")
 
             # 全ての投稿をフィルタリング（親投稿のみ、ブロック関係除外）
             posts_query = Post.objects.filter(q_objects, parent_post__isnull=True)\
@@ -104,8 +104,8 @@ class TimelineView(APIView):
                 post.is_from_followed_user = False
                 logger.info(f"  Fetched Recommended Post ID: {post.id}, User ID: {post.user_id}, Blocked: {post.user_id in blocked_related_user_ids}, FromFollowed: {post.is_from_followed_user}")
 
-            # すべての投稿のみを返却（おすすめ投稿は除外）
-            serializer = PostSerializer(posts_list, many=True, context={'request': request})
+            # 従来通りフォロー＋自分の投稿 ＋ おすすめ投稿を返却
+            serializer = PostSerializer(posts_list + recommended_posts_list, many=True, context={'request': request})
             logger.info(f"TimelineView successfully returning {len(serializer.data)} posts.")
             return Response(serializer.data)
 
@@ -381,3 +381,38 @@ class ReportPostView(APIView):
             detail=detail
         )
         return Response({"detail": "投稿を報告しました。"}, status=status.HTTP_201_CREATED)
+
+# ===========================
+# MapSNS 用: 全ユーザー投稿タイムライン
+# ===========================
+class GlobalTimelineView(APIView):
+    """全ユーザーの親投稿を返すタイムライン（MapSNS 用）"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        logger.info(f"GlobalTimelineView GET request by user {request.user.id}")
+
+        try:
+            # ブロック関連のユーザーを除外
+            blocked_user_ids = set(Block.objects.filter(blocker=request.user).values_list('blocked_id', flat=True)) | \
+                               set(Block.objects.filter(blocked=request.user).values_list('blocker_id', flat=True))
+
+            posts_query = Post.objects.filter(parent_post__isnull=True)\
+                                   .exclude(user_id__in=blocked_user_ids)\
+                                   .select_related('user')\
+                                   .prefetch_related(
+                                       Prefetch('likes', queryset=Like.objects.filter(user=request.user), to_attr='user_like')
+                                   )\
+                                   .annotate(likesCount=Count('likes'), repliesCount=Count('post_replies'))\
+                                   .order_by('-created_at')
+
+            posts_list = list(posts_query)
+            for post in posts_list:
+                post.isLiked = hasattr(post, 'user_like') and len(post.user_like) > 0
+                post.is_from_followed_user = False  # 全体タイムラインでは区別しない
+
+            serializer = PostSerializer(posts_list, many=True, context={'request': request})
+            return Response(serializer.data)
+        except Exception as e:
+            logger.error(f"Error in GlobalTimelineView: {e}", exc_info=True)
+            return Response({"detail": "タイムラインの取得中にエラーが発生しました。"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
