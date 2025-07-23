@@ -386,8 +386,8 @@ class ReportPostView(APIView):
 # MapSNS 用: 全ユーザー投稿タイムライン
 # ===========================
 class GlobalTimelineView(APIView):
-    """全ユーザーの親投稿を返すタイムライン（MapSNS 用）"""
-    permission_classes = [permissions.IsAuthenticated]
+    """全ユーザーの親投稿を返すタイムライン（MapSNS 用・公開）"""
+    permission_classes = [permissions.AllowAny]
 
     def get(self, request):
         logger.info(f"GlobalTimelineView GET request by user {request.user.id}")
@@ -397,18 +397,22 @@ class GlobalTimelineView(APIView):
             blocked_user_ids = set(Block.objects.filter(blocker=request.user).values_list('blocked_id', flat=True)) | \
                                set(Block.objects.filter(blocked=request.user).values_list('blocker_id', flat=True))
 
+            # 匿名ユーザーの場合は like 判定を付けない
+            if request.user.is_authenticated:
+                like_qs = Prefetch('likes', queryset=Like.objects.filter(user=request.user), to_attr='user_like')
+            else:
+                like_qs = Prefetch('likes', queryset=Like.objects.none(), to_attr='user_like')
+
             posts_query = Post.objects.filter(parent_post__isnull=True)\
                                    .exclude(user_id__in=blocked_user_ids)\
                                    .select_related('user')\
-                                   .prefetch_related(
-                                       Prefetch('likes', queryset=Like.objects.filter(user=request.user), to_attr='user_like')
-                                   )\
+                                   .prefetch_related(like_qs)\
                                    .annotate(likesCount=Count('likes'), repliesCount=Count('post_replies'))\
                                    .order_by('-created_at')
 
             posts_list = list(posts_query)
             for post in posts_list:
-                post.isLiked = hasattr(post, 'user_like') and len(post.user_like) > 0
+                post.isLiked = request.user.is_authenticated and hasattr(post, 'user_like') and len(post.user_like) > 0
                 post.is_from_followed_user = False  # 全体タイムラインでは区別しない
 
             serializer = PostSerializer(posts_list, many=True, context={'request': request})
