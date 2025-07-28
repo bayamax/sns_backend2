@@ -4,6 +4,7 @@ from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from .models import Follow # Followモデルをインポート
+from .models import Block  # ブロックモデルをインポート
 
 User = get_user_model()
 
@@ -28,4 +29,11 @@ class FollowAdmin(admin.ModelAdmin):
     list_display = ('follower', 'following', 'created_at')
     list_filter = ('created_at',)
     search_fields = ('follower__username', 'following__username')
+
+# BlockAdmin を追加
+@admin.register(Block)
+class BlockAdmin(admin.ModelAdmin):
+    list_display = ('blocker', 'blocked', 'timestamp')
+    list_filter = ('timestamp',)
+    search_fields = ('blocker__username', 'blocked__username')
 
