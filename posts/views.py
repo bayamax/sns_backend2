@@ -390,12 +390,16 @@ class GlobalTimelineView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
-        logger.info(f"GlobalTimelineView GET request by user {request.user.id}")
+        # 未ログインの場合 request.user は AnonymousUser となり id を持たないため "guest" として記録する
+        logger.info(f"GlobalTimelineView GET request by user {getattr(request.user, 'id', 'guest')}")
 
         try:
-            # ブロック関連のユーザーを除外
-            blocked_user_ids = set(Block.objects.filter(blocker=request.user).values_list('blocked_id', flat=True)) | \
-                               set(Block.objects.filter(blocked=request.user).values_list('blocker_id', flat=True))
+            # ブロック関連のユーザーを除外 (未ログイン時は AnonymousUser なのでクエリをスキップ)
+            if request.user.is_authenticated:
+                blocked_user_ids = set(Block.objects.filter(blocker=request.user).values_list('blocked_id', flat=True)) | \
+                                   set(Block.objects.filter(blocked=request.user).values_list('blocker_id', flat=True))
+            else:
+                blocked_user_ids = set()
 
             # 匿名ユーザーの場合は like 判定を付けない
             if request.user.is_authenticated:
