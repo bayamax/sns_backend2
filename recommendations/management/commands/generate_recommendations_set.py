@@ -131,6 +131,14 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--force", action="store_true", help="既存 UserEmbedding を削除して完全再生成")
         parser.add_argument("--top_k", type=int, default=10, help="保存する推薦上位件数")
+        # 本アプリにのみ帰属するアカウントを対象にするためのフィルタ
+        # accounts.models.UserSNS で定義されている sns_type と合わせる
+        parser.add_argument(
+            "--sns_type",
+            type=str,
+            default="threadplanet",
+            help="対象とするSNSタイプ (例: 'map' or 'threadplanet')",
+        )
 
     # ---------- helpers ----------
     def log(self, msg):
@@ -142,7 +150,13 @@ class Command(BaseCommand):
             self.log("🔍 STEP1: OPENAI_API_KEY 未設定 → 投稿埋め込み補完をスキップ")
             return
 
-        qs = Post.objects.filter(embedding__isnull=True).values("id", "content")
+        # 本アプリ所属ユーザの投稿のみに限定
+        qs = (
+            Post.objects.filter(
+                embedding__isnull=True,
+                user__sns_type__sns_type=self.target_sns,
+            ).values("id", "content")
+        )
         total = qs.count()
         self.log(f"🔍 STEP1: 未埋め込み投稿 = {total}")
 
@@ -177,7 +191,12 @@ class Command(BaseCommand):
             UserEmbedding.objects.all().delete()
             self.log(f"🗑️ 旧 UserEmbedding {cnt} 件を削除 (--force)")
 
-        users = User.objects.filter(is_staff=False, is_superuser=False)
+        # 対象SNSタイプのユーザに限定
+        users = User.objects.filter(
+            is_staff=False,
+            is_superuser=False,
+            sns_type__sns_type=self.target_sns,
+        )
         total = users.count()
         self.log(f"🔍 STEP2: UserEmbedding 生成 対象 {total} 人")
 
@@ -208,11 +227,15 @@ class Command(BaseCommand):
 
     # ---------- STEP 3: 推薦再計算 ----------
     def rebuild_recommendations(self, predictor, device, top_k):
-        UserRecommendation.objects.all().delete()
-        self.log("🗑️ 旧推薦 全削除")
+        # 既存推薦を対象SNSタイプのユーザ分のみ削除
+        UserRecommendation.objects.filter(user__sns_type__sns_type=self.target_sns).delete()
+        self.log("🗑️ 旧推薦 (指定SNSタイプ) を削除")
 
-        vec_map = {str(e.user_id): np.array(e.node2vec_vector, np.float32)
-                   for e in UserEmbedding.objects.all() if e.node2vec_vector}
+        vec_map = {
+            str(e.user_id): np.array(e.node2vec_vector, np.float32)
+            for e in UserEmbedding.objects.filter(user__sns_type__sns_type=self.target_sns)
+            if e.node2vec_vector
+        }
         users = list(vec_map.keys())
 
         for uid in users:
@@ -244,6 +267,9 @@ class Command(BaseCommand):
         t0 = time.time()
         device = choose_device()
         self.log(f"🖥️ device = {device}")
+
+        # 対象SNSタイプを保持
+        self.target_sns = opt.get("sns_type", "threadplanet")
 
         # Step 0: モデル & 資材ロード
         if not (os.path.exists(CODEBOOK_PATH) and os.path.exists(ENCODER_CKPT) and os.path.exists(PREDICTOR_CKPT)):
