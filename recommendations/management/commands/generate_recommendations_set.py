@@ -1,4 +1,5 @@
 import os, time, numpy as np, torch, torch.nn as nn
+import torch.nn.functional as F
 from sklearn.metrics import pairwise_distances_argmin
 from django.core.management.base import BaseCommand
 from django.conf import settings
@@ -240,14 +241,13 @@ class Command(BaseCommand):
 
         for uid in users:
             cand = [c for c in users if c != uid]
-            src_vec = torch.tensor(vec_map[uid], device=device).unsqueeze(0)
-            concat_list = []
+            src_vec = F.normalize(torch.tensor(vec_map[uid], device=device), dim=0).unsqueeze(0)
             cand_vecs = []
             for cid in cand:
-                cand_vecs.append(vec_map[cid])
+                cand_vecs.append(F.normalize(torch.tensor(vec_map[cid], device=device), dim=0))
             if not cand_vecs:
                 continue
-            cand_tensor = torch.tensor(cand_vecs, device=device)
+            cand_tensor = torch.stack(cand_vecs)
             src_rep = src_vec.repeat(cand_tensor.size(0), 1)
             concat = torch.cat([src_rep, cand_tensor], dim=1)
             with torch.no_grad():
