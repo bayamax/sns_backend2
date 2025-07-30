@@ -7,6 +7,8 @@ from posts.models import Post
 from recommendations.models import (
     PostEmbedding, UserEmbedding, UserRecommendation,
 )
+from django.db.models import Q
+from accounts.models import UserSNS
 
 # -------------------- 設定 --------------------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")  # 必要に応じて環境変数で設定
@@ -152,10 +154,9 @@ class Command(BaseCommand):
 
         # 本アプリ所属ユーザの投稿のみに限定
         qs = (
-            Post.objects.filter(
-                embedding__isnull=True,
-                user__sns_type__sns_type=self.target_sns,
-            ).values("id", "content")
+            Post.objects.filter(embedding__isnull=True)
+            .filter(self.sns_q)
+            .values("id", "content")
         )
         total = qs.count()
         self.log(f"🔍 STEP1: 未埋め込み投稿 = {total}")
@@ -192,10 +193,9 @@ class Command(BaseCommand):
             self.log(f"🗑️ 旧 UserEmbedding {cnt} 件を削除 (--force)")
 
         # 対象SNSタイプのユーザに限定
-        users = User.objects.filter(
-            is_staff=False,
-            is_superuser=False,
-            sns_type__sns_type=self.target_sns,
+        users = (
+            User.objects.filter(is_staff=False, is_superuser=False)
+            .filter(self.sns_q)
         )
         total = users.count()
         self.log(f"🔍 STEP2: UserEmbedding 生成 対象 {total} 人")
@@ -228,12 +228,12 @@ class Command(BaseCommand):
     # ---------- STEP 3: 推薦再計算 ----------
     def rebuild_recommendations(self, predictor, device, top_k):
         # 既存推薦を対象SNSタイプのユーザ分のみ削除
-        UserRecommendation.objects.filter(user__sns_type__sns_type=self.target_sns).delete()
+        UserRecommendation.objects.filter(self.sns_q).delete()
         self.log("🗑️ 旧推薦 (指定SNSタイプ) を削除")
 
         vec_map = {
             str(e.user_id): np.array(e.node2vec_vector, np.float32)
-            for e in UserEmbedding.objects.filter(user__sns_type__sns_type=self.target_sns)
+            for e in UserEmbedding.objects.filter(self.sns_q)
             if e.node2vec_vector
         }
         users = list(vec_map.keys())
@@ -270,6 +270,12 @@ class Command(BaseCommand):
 
         # 対象SNSタイプを保持
         self.target_sns = opt.get("sns_type", "threadplanet")
+
+        # UserSNS レコードが存在するかで null 取り扱いを切替
+        labeled_exists = UserSNS.objects.exists()
+        self.sns_q = Q(user__sns_type__sns_type=self.target_sns) if labeled_exists else (
+            Q(user__sns_type__sns_type=self.target_sns) | Q(user__sns_type__isnull=True)
+        )
 
         # Step 0: モデル & 資材ロード
         if not (os.path.exists(CODEBOOK_PATH) and os.path.exists(ENCODER_CKPT) and os.path.exists(PREDICTOR_CKPT)):
