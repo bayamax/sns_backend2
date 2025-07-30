@@ -195,7 +195,7 @@ class Command(BaseCommand):
         # 対象SNSタイプのユーザに限定
         users = (
             User.objects.filter(is_staff=False, is_superuser=False)
-            .filter(self.sns_q)
+            .filter(self.sns_user_q)
         )
         total = users.count()
         self.log(f"🔍 STEP2: UserEmbedding 生成 対象 {total} 人")
@@ -276,6 +276,10 @@ class Command(BaseCommand):
         self.sns_q = Q(user__sns_type__sns_type=self.target_sns) if labeled_exists else (
             Q(user__sns_type__sns_type=self.target_sns) | Q(user__sns_type__isnull=True)
         )
+        # User モデルに適用するフィルタは "user__" を外した形で保持
+        self.sns_user_q = Q(sns_type__sns_type=self.target_sns) if labeled_exists else (
+            Q(sns_type__sns_type=self.target_sns) | Q(sns_type__isnull=True)
+        )
 
         # Step 0: モデル & 資材ロード
         if not (os.path.exists(CODEBOOK_PATH) and os.path.exists(ENCODER_CKPT) and os.path.exists(PREDICTOR_CKPT)):
@@ -306,4 +310,4 @@ class Command(BaseCommand):
         # 3. 推薦再計算
         self.rebuild_recommendations(predictor, device, opt["top_k"])
 
-        self.log(f"🎉 ALL DONE in {time.time() - t0:.1f}s") 
+        self.log(f"🎉 ALL DONE in {time.time() - t0:.1f}s")
