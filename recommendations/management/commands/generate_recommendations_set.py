@@ -19,7 +19,20 @@ MAX_POSTS = 100  # 1ユーザ当たり使用する最大投稿数
 
 # set_reco_outputs ディレクトリ（codebook や学習済みモデルを置く場所）
 PRETRAIN_DIR = os.path.join(settings.BASE_DIR, "recommendations", "pretrained")
-CODEBOOK_PATH = os.path.join(PRETRAIN_DIR, "codebook_k512.npy")
+
+# --- 最新 codebook_k*.npy を自動検出 -----------------------------
+def find_latest_codebook(dir_path: str) -> str:
+    """codebook_kXXXX.npy の中で最大 XXXX を返す"""
+    try:
+        files = [f for f in os.listdir(dir_path) if f.startswith("codebook_k") and f.endswith(".npy")]
+    except FileNotFoundError:
+        files = []
+    if not files:
+        raise FileNotFoundError(f"codebook_k*.npy が {dir_path} に見つかりません")
+    latest = max(files, key=lambda s: int(s.split("_k")[1].split(".")[0]))
+    return os.path.join(dir_path, latest)
+
+CODEBOOK_PATH = find_latest_codebook(PRETRAIN_DIR)
 ENCODER_CKPT = os.path.join(PRETRAIN_DIR, "checkpoint.pth")
 PREDICTOR_CKPT = os.path.join(PRETRAIN_DIR, "follow_predictor.pt")
 
