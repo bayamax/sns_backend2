@@ -15,6 +15,6 @@ urlpatterns = [
 if settings.STATIC_URL:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
-# メディアファイルの設定（開発環境のみ）
-if settings.DEBUG and settings.MEDIA_URL:
+# メディアファイル (本番も含めて)
+if settings.MEDIA_URL:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
