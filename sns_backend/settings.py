@@ -13,7 +13,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True'
 
 # 本番環境では環境変数 DJANGO_ALLOWED_HOSTS にカンマ区切りでホスト名を渡す
-ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = ['api.daenishi.org', 'localhost', '127.0.0.1']
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
