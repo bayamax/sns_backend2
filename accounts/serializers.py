@@ -3,7 +3,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model, authenticate
 from django.utils.translation import gettext_lazy as _
-from .models import Follow, Block
+from .models import Follow, Block, UserSNS
 
 User = get_user_model()
 
@@ -64,13 +64,14 @@ class UserSerializer(serializers.ModelSerializer):
         return False
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
+    sns_type = serializers.ChoiceField(choices=UserSNS.SNS_TYPE_CHOICES, required=False, write_only=True, help_text="登録先SNSタイプ")
     """ユーザー登録シリアライザー"""
     password = serializers.CharField(style={'input_type': 'password'}, write_only=True)
     password2 = serializers.CharField(style={'input_type': 'password'}, write_only=True)
     
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'password2']
+        fields = ['username', 'email', 'password', 'password2', 'sns_type']
     
     def validate(self, attrs):
         # パスワード確認
@@ -111,6 +112,9 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             email=validated_data.get('email', ''),
             password=validated_data['password']
         )
+        # sns_type が指定されていればそれを使用、無ければ 'threadplanet'
+        sns_type = validated_data.pop('sns_type', 'threadplanet') if isinstance(validated_data, dict) else 'threadplanet'
+        UserSNS.objects.get_or_create(user=user, defaults={'sns_type': sns_type})
         return user
 
 class UserLoginSerializer(serializers.Serializer):

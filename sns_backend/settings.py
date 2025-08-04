@@ -9,8 +9,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 
-DEBUG = True
-ALLOWED_HOSTS = ['178.128.84.239', 'localhost', '127.0.0.1', 'api.daenishi.org']
+# DEBUG 及び許可ホストの設定は環境変数で管理
+DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True'
+
+# 本番環境では環境変数 DJANGO_ALLOWED_HOSTS にカンマ区切りでホスト名を渡す
+ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -51,7 +54,12 @@ INSTALLED_APPS = [
 ]
 
 # セキュリティキーの追加
-SECRET_KEY = 'django-insecure-your-secret-key-here'
+# 本番環境では必ず環境変数 DJANGO_SECRET_KEY を設定してください。
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
+if not SECRET_KEY:
+    # 開発環境向けのフォールバックキー（必ず本番では上書きすること）
+    SECRET_KEY = 'django-insecure-development-only-key'
+
 
 # ミドルウェアの設定
 MIDDLEWARE = [
@@ -104,12 +112,19 @@ DATABASES = {
 # カスタムユーザーモデルの設定
 AUTH_USER_MODEL = 'accounts.User'
 
-# CORS設定
-CORS_ALLOW_ALL_ORIGINS = True  # 開発用。本番環境では特定のオリジンのみ許可するべき
+# CORS 設定
+if DEBUG:
+    # 開発時はすべて許可
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    # 本番環境では許可ドメインを環境変数で指定
+    CORS_ALLOW_ALL_ORIGINS = False
+    # DJANGO_CORS_ALLOWED_ORIGINS にカンマ区切りで URI を指定
+    CORS_ALLOWED_ORIGINS = [origin for origin in os.environ.get('DJANGO_CORS_ALLOWED_ORIGINS', '').split(',') if origin]
 
 # HTTPS設定
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SECURE_SSL_REDIRECT = False  # Nginxで既にリダイレクトしているため
+SECURE_SSL_REDIRECT = not DEBUG  # 本番環境ではHTTPSへ強制リダイレクト
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 

@@ -352,12 +352,6 @@ class ChildCommentsView(APIView):
         serializer = PostSerializer(child_comments, many=True, context={'request': request})
         return Response(serializer.data)
 
-# デバッグ用の簡単なテストビュー
-class TestView(APIView):
-    permission_classes = [permissions.AllowAny] # 認証不要にする
-    def get(self, request):
-        print("TestView reached!") # コンソールにログ出力
-        return Response({"message": "Posts test view reached!"})
 
 class ReportPostView(APIView):
     """投稿を報告する"""

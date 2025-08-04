@@ -1,6 +1,7 @@
 # accounts/views.py
 
 import os
+import logging
 from rest_framework import status, permissions, generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -16,7 +17,7 @@ from .serializers import (
 )
 from .utils import verify_apple_identity_token
 from notifications.serializers import NotificationSerializer
-from .models import Follow, User, Block
+from .models import Follow, User, Block, UserSNS
 from notifications.models import Notification
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
@@ -98,6 +99,10 @@ class AppleLoginView(APIView):
             defaults={"email": email or ""},
         )
 
+        # sns_type がクライアントから送られていればそれを使用、無ければ 'map'
+        sns_type = request.data.get('sns_type', 'threadplanet')
+        UserSNS.objects.get_or_create(user=user, defaults={'sns_type': sns_type})
+
         refresh = RefreshToken.for_user(user)
         user_data = UserSerializer(user, context={"request": request}).data
         user_data["token"] = str(refresh.access_token)
@@ -117,19 +122,25 @@ class UserProfileView(APIView):
         return Response(serializer.data)
     
     def put(self, request):
-        # デバッグ情報の出力
-        print("プロフィール更新リクエスト受信:")
-        print(f"Content-Type: {request.content_type}")
-        print(f"データ: {request.data}")
-        print(f"ファイル: {request.FILES}")
+        # ログ (必要に応じて INFO レベルに変更)
+        logger = logging.getLogger(__name__)
+        logger.debug("プロフィール更新リクエスト受信")
     
         try:
             # multipart/form-data形式のリクエストを処理
             if 'profile_image' in request.FILES:
                 # プロフィール画像のアップロード処理
                 profile_image = request.FILES['profile_image']
+
+                # --- セキュリティ対策: 画像ファイルバリデーション ---
+                # 5MB 以上のファイルは拒否
+                if profile_image.size > 5 * 1024 * 1024:
+                    return Response({'detail': '画像サイズは5MB以下にしてください'}, status=status.HTTP_400_BAD_REQUEST)
+                # Content-Type ヘッダが image/* であることを確認
+                if not profile_image.content_type.startswith('image/'):
+                    return Response({'detail': '画像ファイルのみアップロード可能です'}, status=status.HTTP_400_BAD_REQUEST)
+
                 request.user.profile_image = profile_image
-                print(f"画像名: {profile_image.name}, サイズ: {profile_image.size}バイト")
             
                 # 他のフィールドの更新
                 if 'username' in request.data:
