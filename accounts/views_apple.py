@@ -10,6 +10,7 @@ from django.contrib.auth import get_user_model
 
 from .serializers import UserSerializer
 from .utils import verify_apple_identity_token
+from .models import UserSNS
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -84,7 +85,7 @@ class AppleLoginJWT(APIView):
             return Response({"detail": "Invalid audience", "error": f"aud={claims.get('aud')}"}, status=status.HTTP_400_BAD_REQUEST)
 
         apple_sub = claims.get("sub")
-        email = claims.get("email")
+        email = ""  # 常に空文字をセットしてメールを保存しない
         if not apple_sub:
             return Response({"detail": "Invalid Apple token"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -119,6 +120,12 @@ class AppleLoginJWT(APIView):
             if email and not user.email:
                 user.email = email
                 user.save(update_fields=["email"])
+
+        # --- 最小変更: UserSNS 未作成ユーザーに threadplanet を付与（既存は変更しない） ---
+        try:
+            UserSNS.objects.get_or_create(user=user, defaults={"sns_type": "threadplanet"})
+        except Exception as e:
+            logger.error("UserSNS get_or_create failed (user_id=%s): %s", getattr(user, "id", None), e)
 
         refresh = RefreshToken.for_user(user)
         access_token = refresh.access_token
