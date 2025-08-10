@@ -13,9 +13,14 @@ class UserBriefSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'profile_image_url', 'bio']
-    
+
     def get_profile_image_url(self, obj):
-        return obj.profile_image_url
+        if obj.profile_image and hasattr(obj.profile_image, 'url'):
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_image.url)
+            return obj.profile_image.url
+        return None
 
 class PostSerializer(serializers.ModelSerializer):
     """投稿シリアライザー（YAML仕様準拠：snake_caseフィールド）"""
