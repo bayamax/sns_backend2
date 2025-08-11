@@ -78,9 +78,9 @@ MIDDLEWARE = [
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 MEDIA_URL = '/media/'
-# Docker 構成では Nginx が /app/media を配信しているため、Django 側の保存先も /app/media に統一する
-# BASE_DIR は /app/sns_backend を指すため、1 つ上の /app を基点に media ディレクトリを指定
-MEDIA_ROOT = os.path.join(os.path.dirname(BASE_DIR), 'media')
+# Docker 構成（docker-compose.yml と nginx.conf）に厳密に合わせて固定
+# 両コンテナとも /app/media を共有マウントしている前提
+MEDIA_ROOT = '/app/media'
 
 # テンプレート設定
 TEMPLATES = [
