@@ -3,7 +3,6 @@
 from django.urls import path
 # simplejwtのビューをインポート
 from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
     TokenRefreshView,
 )
 from .views import (
@@ -21,14 +20,15 @@ from .views import (
     BlockedUsersListView,
 )
 from .views_apple import AppleLoginJWT
+from .views import CustomTokenObtainPairView
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),
     path('login/', LoginView.as_view(), name='login'),
     path('apple-login/', AppleLoginView.as_view(), name='apple-login'),
     path('apple/login/', AppleLoginJWT.as_view(), name='apple-login-jwt'),
-    # simplejwt のトークン取得・リフレッシュ用エンドポイントを追加
-    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    # トークン取得はカスタムビューに差し替え（ユーザー情報を含む／sns_type 付与）
+    path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('users/profile/', UserProfileView.as_view(), name='user-profile'),
     path('users/<int:pk>/', UserProfileView.as_view(), name='user-detail'),

@@ -121,9 +121,17 @@ class AppleLoginJWT(APIView):
                 user.email = email
                 user.save(update_fields=["email"])
 
-        # --- 最小変更: UserSNS 未作成ユーザーに threadplanet を付与（既存は変更しない） ---
+        # --- UserSNS 付与: リクエストに sns_type があればそれを優先。なければ既定（モデル default） ---
         try:
-            UserSNS.objects.get_or_create(user=user, defaults={"sns_type": "threadplanet"})
+            requested_sns_type = request.data.get("sns_type")
+            if requested_sns_type:
+                valid_choices = {choice[0] for choice in UserSNS.SNS_TYPE_CHOICES}
+                if requested_sns_type in valid_choices:
+                    UserSNS.objects.get_or_create(user=user, defaults={"sns_type": requested_sns_type})
+                else:
+                    UserSNS.objects.get_or_create(user=user)
+            else:
+                UserSNS.objects.get_or_create(user=user)
         except Exception as e:
             logger.error("UserSNS get_or_create failed (user_id=%s): %s", getattr(user, "id", None), e)
 

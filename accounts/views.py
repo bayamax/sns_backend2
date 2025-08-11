@@ -6,6 +6,7 @@ from rest_framework import status, permissions, generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView
 from django.contrib.auth import authenticate
 from .serializers import (
     UserSerializer,
@@ -107,6 +108,45 @@ class AppleLoginView(APIView):
         user_data = UserSerializer(user, context={"request": request}).data
         user_data["token"] = str(refresh.access_token)
         return Response(user_data)
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """SimpleJWT のトークン発行にユーザー情報を含めて返し、必要に応じて sns_type を付与するビュー"""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # 認証に成功したユーザー
+        user = serializer.user
+
+        # リクエストで sns_type が指定されている場合のみ、新規ユーザーに付与（既存は変更しない）
+        try:
+            sns_type_value = request.data.get("sns_type")
+            if sns_type_value:
+                # choices のキーに含まれている場合のみ
+                valid_choices = {choice[0] for choice in UserSNS.SNS_TYPE_CHOICES}
+                if sns_type_value in valid_choices:
+                    UserSNS.objects.get_or_create(user=user, defaults={"sns_type": sns_type_value})
+                else:
+                    # 無効値の場合は単に既定で作成（モデルの default に委ねる）
+                    UserSNS.objects.get_or_create(user=user)
+            else:
+                # 未作成なら既定値で作成（既存は変更しない）
+                UserSNS.objects.get_or_create(user=user)
+        except Exception:
+            # sns_type 周りは致命ではないので、失敗してもログイン自体は続行
+            pass
+
+        # SimpleJWT が返すトークンペイロード
+        data = serializer.validated_data  # {"access": ..., "refresh": ...}
+
+        # ユーザー情報をネストして返す（iOS クライアントの期待形式）
+        user_data = UserSerializer(user, context={"request": request}).data
+        data["user"] = user_data
+
+        return Response(data, status=status.HTTP_200_OK)
 
 class UserProfileView(APIView):
     """ユーザープロフィールビュー"""
