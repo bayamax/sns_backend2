@@ -74,11 +74,13 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# 静的ファイルの設定
+# 静的ファイル/メディアの設定
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+# Docker 構成では Nginx が /app/media を配信しているため、Django 側の保存先も /app/media に統一する
+# BASE_DIR は /app/sns_backend を指すため、1 つ上の /app を基点に media ディレクトリを指定
+MEDIA_ROOT = os.path.join(os.path.dirname(BASE_DIR), 'media')
 
 # テンプレート設定
 TEMPLATES = [
