@@ -58,13 +58,38 @@ class LoginView(APIView):
             if getattr(user, 'is_apple_only', False):
                 return Response({"detail": "Use Sign in with Apple for this account."}, status=status.HTTP_400_BAD_REQUEST)
 
+            # リクエストで sns_type が指定されている場合は UserSNS を作成（既存は変更しない）
+            try:
+                sns_type_value = request.data.get('sns_type')
+                if sns_type_value:
+                    valid_choices = {choice[0] for choice in UserSNS.SNS_TYPE_CHOICES}
+                    if sns_type_value in valid_choices:
+                        UserSNS.objects.get_or_create(user=user, defaults={'sns_type': sns_type_value})
+                    else:
+                        UserSNS.objects.get_or_create(user=user)
+                else:
+                    UserSNS.objects.get_or_create(user=user)
+            except Exception:
+                pass
+
             refresh = RefreshToken.for_user(user)
 
             user_data = UserSerializer(user, context={'request': request}).data
 
-            response_data = user_data
-            response_data['access'] = str(refresh.access_token)
-            response_data['refresh'] = str(refresh)
+            # MapSNS 互換のためフラットなユーザーフィールドも併せて返す
+            flat = {
+                'id': user_data.get('id'),
+                'username': user_data.get('username'),
+                'profile_image_url': user_data.get('profile_image_url'),
+                'bio': user_data.get('bio'),
+            }
+
+            response_data = {
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'user': user_data,
+                **flat,
+            }
 
             return Response(response_data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -142,11 +167,24 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         # SimpleJWT が返すトークンペイロード
         data = serializer.validated_data  # {"access": ..., "refresh": ...}
 
-        # ユーザー情報をネストして返す（iOS クライアントの期待形式）
+        # ユーザー情報
         user_data = UserSerializer(user, context={"request": request}).data
-        data["user"] = user_data
 
-        return Response(data, status=status.HTTP_200_OK)
+        # MapSNS 互換のためフラットなユーザーフィールドも併せて返す
+        flat = {
+            'id': user_data.get('id'),
+            'username': user_data.get('username'),
+            'profile_image_url': user_data.get('profile_image_url'),
+            'bio': user_data.get('bio'),
+        }
+
+        response_payload = {
+            **data,           # access, refresh
+            'user': user_data,
+            **flat,
+        }
+
+        return Response(response_payload, status=status.HTTP_200_OK)
 
 class UserProfileView(APIView):
     """ユーザープロフィールビュー"""

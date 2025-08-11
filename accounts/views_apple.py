@@ -140,8 +140,19 @@ class AppleLoginJWT(APIView):
 
         user_data = UserSerializer(user, context={"request": request}).data
 
-        return Response({
+        # MapSNS クライアントはフラットなユーザーフィールドを期待するため、両対応で返却
+        flat = {
+            "id": user_data.get("id"),
+            "username": user_data.get("username"),
+            "profile_image_url": user_data.get("profile_image_url"),
+            "bio": user_data.get("bio"),
+        }
+
+        response_payload = {
             "access": str(access_token),
             "refresh": str(refresh),
             "user": user_data,
-        }, status=status.HTTP_200_OK) 
+            **flat,
+        }
+
+        return Response(response_payload, status=status.HTTP_200_OK)
