@@ -13,12 +13,28 @@ DJANGO_DEBUG: True のときはサンドボックス(APNs development)へ送信
 
 import json
 import logging
-import os
 from typing import Dict, List
+
+# -----------------------------
+# Python 3.11 compatibility fix
+# -----------------------------
+# apns2 < 0.10 は `from collections import Iterable` など
+# 廃止パスを参照しているため Python 3.10+ で ImportError になる。
+# 先に collections.abc から alias を注入して回避する。
+
+import collections, collections.abc
+
+for _name in ("Iterable", "Mapping", "MutableMapping"):
+    if not hasattr(collections, _name):
+        setattr(collections, _name, getattr(collections.abc, _name))
+
+# ---- 通常 import ----
+import os
+import logging
 
 from apns2.client import APNsClient
 from apns2.payload import Payload
-from apns2.errors import exception_class_for_reason
+from apns2.errors import BadDeviceToken, DeviceTokenNotForTopic, Unregistered
 
 logger = logging.getLogger(__name__)
 
