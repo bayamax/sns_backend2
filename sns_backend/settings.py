@@ -49,7 +49,7 @@ INSTALLED_APPS = [
     'accounts',
     'posts',
     'recommendations',
-    'notifications',
+    'notifications.apps.NotificationsConfig',
     'api',
 ]
 
