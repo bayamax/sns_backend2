@@ -81,8 +81,17 @@ def send_push_after_notification_created(sender, instance, created, **kwargs):
     try:
         from .push import send_ios_notification
 
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # Refresh recipient from DB to ensure latest devices relation
+        try:
+            instance.recipient.refresh_from_db(fields=None)
+        except Exception:
+            pass
+
         device_tokens = list(instance.recipient.devices.filter(platform="ios").values_list("token", flat=True))
-        print("DEBUG push tokens", device_tokens)
+        logger.info("DEBUG push tokens %s", device_tokens)
         if not device_tokens:
             return
 
