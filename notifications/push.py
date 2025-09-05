@@ -125,7 +125,11 @@ def send_ios_notification(
                         Device.objects.filter(token=token).delete()
                         print(f"無効なデバイストークンを削除しました: {token[:10]}...")
             except Exception as ex:
-                print(f"APNs 個別送信エラー token={token[:10]}... err={ex}")
+                # apns2.errors.exception.APNSServerException 系では status / reason 属性を持つ
+                status = getattr(ex, "status", None)
+                reason = getattr(ex, "reason", None) or getattr(ex, "description", None)
+
+                print(f"APNs 個別送信エラー token={token[:10]}... status={status} reason={reason} err={ex}")
 
     except Exception as e:
         logger.error(
