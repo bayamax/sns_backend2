@@ -113,6 +113,9 @@ def send_ios_notification(
                 status = getattr(response, "status", None) or response.get("status")
                 reason = getattr(response, "description", None) or response.get("reason")
 
+                # raw debug
+                print(f"APNs RAW response token={token[:12]} obj={response!r}")
+
                 if str(status) == "200":
                     print(f"APNs 送信成功 token={token[:10]}... status={status}")
                 else:
