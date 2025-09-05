@@ -19,7 +19,7 @@ services:
       APNS_KEY_ID: "R5C23Y4HNN"        # Apple Developer > Keys に表示される Key ID
       APNS_TEAM_ID: "55Z2N5X2Z6" # 10桁の Team ID
       APNS_TOPIC: "Enishi.enishi-Enishi.enishi" # アプリの Bundle ID
-      DJANGO_DEBUG: "True"   # ← シミュレータ検証用。Production 切替時に必ず False へ戻す
+      DJANGO_DEBUG: "False"  # 本番環境は Production (api.push.apple.com) へ送信する
 
     volumes:
       # AuthKey ファイルを read-only でコンテナにマウント
