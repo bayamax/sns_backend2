@@ -169,10 +169,11 @@ def follow_created_notification(sender, instance, created, **kwargs):
 # Like モデルが直接作成された場合（PostLikeView など）
 # ------------------------------
 
-from django.db.models.signals import post_save as _ps
+from django.db.models.signals import post_save
 
 
-@_ps(sender=Like)
+# Like モデル post_save レシーバー
+@receiver(post_save, sender=Like)
 def like_model_created_notification(sender, instance, created, **kwargs):
     if not created:
         return
