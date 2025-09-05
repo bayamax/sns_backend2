@@ -24,7 +24,7 @@ from typing import Dict, List
 
 import collections, collections.abc
 
-for _name in ("Iterable", "Mapping", "MutableMapping"):
+for _name in ("Iterable", "Mapping", "MutableMapping", "MutableSet", "Set"):
     if not hasattr(collections, _name):
         setattr(collections, _name, getattr(collections.abc, _name))
 
