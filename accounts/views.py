@@ -66,9 +66,10 @@ class LoginView(APIView):
                     if sns_type_value in valid_choices:
                         UserSNS.objects.get_or_create(user=user, defaults={'sns_type': sns_type_value})
                     else:
-                        UserSNS.objects.get_or_create(user=user)
+                        UserSNS.objects.get_or_create(user=user, defaults={'sns_type': 'threadplanet'})
                 else:
-                    UserSNS.objects.get_or_create(user=user)
+                    # SNSクライアントは sns_type を送らないため、既定は threadplanet
+                    UserSNS.objects.get_or_create(user=user, defaults={'sns_type': 'threadplanet'})
             except Exception:
                 pass
 

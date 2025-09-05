@@ -39,6 +39,28 @@ def create_notification(sender, recipient, notification_type, post=None, reply_p
         post=post,
         reply_post=reply_post
     )
+
+    # デバイストークン取得 & プッシュ送信
+    try:
+        from .push import send_ios_notification
+
+        device_tokens = list(recipient.devices.filter(platform="ios").values_list("token", flat=True))
+        if device_tokens:
+            title_map = {
+                Notification.LIKE: "いいねされました",
+                Notification.FOLLOW: "フォローされました",
+                Notification.REPLY: "返信が届きました",
+                Notification.MENTION: "メンションされました",
+            }
+            title = title_map.get(notification_type, "お知らせ")
+            body = post.content[:50] if post else "SNS"
+            custom_data = {"notification_id": notification.id}
+            send_ios_notification(device_tokens, title, body, custom_data)
+    except Exception as e:
+        # プッシュ送信失敗はエラーを握りつぶしてログのみ
+        import logging
+
+        logging.getLogger(__name__).warning(f"Push notification failed: {e}")
     
     return notification
 

@@ -8,7 +8,7 @@ from django.conf import settings
 from .models import Post
 
 # 確率は環境変数で調整可能 (デフォルト 5%)
-TRIGGER_PROB = float(os.getenv("RECO_TRIGGER_PROB", "0.05"))
+TRIGGER_PROB = float(os.getenv("RECO_TRIGGER_PROB", "0.2"))
 
 @receiver(post_save, sender=Post)
 def maybe_generate_recommendations(sender, instance, created, **kwargs):

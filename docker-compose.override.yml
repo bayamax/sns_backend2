@@ -11,4 +11,15 @@ services:
         AeREN7Fx3bdLBmSYyTLb/vysFzagCgYIKoZIzj0DAQehRANCAATZx7wjDnkgexWZ
         Vxsi3fVe5bGc4BwFuzoLFZX+1mrZy/IpPEWcKkFnwn4hu2cWJmTeIUJ+hNS1A0dz
         5fJNUWsJ
-        -----END PRIVATE KEY----- 
+        -----END PRIVATE KEY-----
+      # -------------------------
+      # APNs (Push通知) 用設定
+      # -------------------------
+      APNS_AUTH_KEY_PATH: "/app/secrets/AuthKey_R5C23Y4HNN.p8"  # 実ファイル名に合わせて変更
+      APNS_KEY_ID: "R5C23Y4HNN"        # Apple Developer > Keys に表示される Key ID
+      APNS_TEAM_ID: "55Z2N5X2Z6" # 10桁の Team ID
+      APNS_TOPIC: "Enishi.enishi-Enishi.enishi" # アプリの Bundle ID
+
+    volumes:
+      # AuthKey ファイルを read-only でコンテナにマウント
+      - ./secrets:/app/secrets:ro 

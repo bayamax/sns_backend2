@@ -30,3 +30,36 @@ class Notification(models.Model):
     
     def __str__(self):
         return f"{self.sender.username} {self.get_notification_type_display()} to {self.recipient.username}"
+
+
+# ------------------------------
+# Push通知用デバイスモデル
+# ------------------------------
+
+class Device(models.Model):
+    """APNs/Firebase などのデバイストークンを保存するモデル"""
+
+    IOS = "ios"
+    ANDROID = "android"
+
+    PLATFORM_CHOICES = (
+        (IOS, "iOS"),
+        (ANDROID, "Android"),
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="devices",
+    )
+    token = models.CharField(max_length=200, unique=True)
+    platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES, default=IOS)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Device"
+        verbose_name_plural = "Devices"
+
+    def __str__(self):
+        return f"{self.user} - {self.platform}"

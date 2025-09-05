@@ -18,3 +18,4 @@ openai>=1.0.0
 feedparser
 scikit-learn
 openai==0.28
+apns2==0.10.2

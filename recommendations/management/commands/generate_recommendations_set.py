@@ -218,9 +218,11 @@ class Command(BaseCommand):
         PAD_ID = K + 1
 
         for idx, u in enumerate(users, 1):
-            vecs = [np.array(pe.vector, np.float32)
-                    for pe in PostEmbedding.objects.filter(post__user=u)
-                    if pe.vector and len(pe.vector) == 3072]
+            vecs = [
+                np.array(pe.vector, np.float32)
+                for pe in PostEmbedding.objects.filter(post__user=u).order_by('-post__created_at')
+                if pe.vector and len(pe.vector) == 3072
+            ]
             if not vecs:
                 continue
 

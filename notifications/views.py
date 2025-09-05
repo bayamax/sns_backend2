@@ -3,7 +3,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .models import Notification
+from .models import Device
 from .serializers import NotificationSerializer
+from .serializers import DeviceSerializer
 
 class NotificationListView(generics.ListAPIView):
     """通知一覧を取得するAPIビュー"""
@@ -57,3 +59,40 @@ class MarkAllNotificationsAsReadView(APIView):
             {"detail": f"{count}件の通知を既読にしました"}, 
             status=status.HTTP_200_OK
         )
+
+
+# ------------------------------
+# Device 登録 / 削除 API
+# ------------------------------
+
+
+class DeviceRegisterView(APIView):
+    """デバイストークンを登録・更新するAPIビュー"""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = DeviceSerializer(data=request.data)
+        if serializer.is_valid():
+            token = serializer.validated_data["token"]
+            platform = serializer.validated_data.get("platform", Device.IOS)
+
+            device, _ = Device.objects.update_or_create(
+                token=token,
+                defaults={
+                    "user": request.user,
+                    "platform": platform,
+                },
+            )
+
+            return Response(DeviceSerializer(device).data, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request):
+        token = request.data.get("token")
+        if not token:
+            return Response({"detail": "token は必須です"}, status=status.HTTP_400_BAD_REQUEST)
+
+        Device.objects.filter(token=token, user=request.user).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
