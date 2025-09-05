@@ -99,9 +99,9 @@ def send_ios_notification(
             "title": title,
             "body": body,
         },
-        badge=1,  # 未読バッジ数を更新
+        badge=1,
         sound="default",
-        custom_data=custom_data or {}
+        custom=custom_data or {}
     )
 
     try:
@@ -110,10 +110,7 @@ def send_ios_notification(
 
         print(f"APNs 送信開始: devices={len(device_tokens)} title={title}")
 
-        response_list = client.send_notification_batch(
-            notifications=notifications,
-            topic=topic
-        )
+        response_list = client.send_notification_batch(notifications, topic)
 
         for token, response in response_list:
             status = response.get("status") or response.get("Status")
