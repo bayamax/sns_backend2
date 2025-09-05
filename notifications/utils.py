@@ -164,3 +164,23 @@ def follow_created_notification(sender, instance, created, **kwargs):
             recipient=instance.following,
             notification_type=Notification.FOLLOW
         )
+
+# ------------------------------
+# Like モデルが直接作成された場合（PostLikeView など）
+# ------------------------------
+
+from django.db.models.signals import post_save as _ps
+
+
+@_ps(sender=Like)
+def like_model_created_notification(sender, instance, created, **kwargs):
+    if not created:
+        return
+    # Like オブジェクトが保存された直後に通知作成
+    if instance.post.user != instance.user:  # 自分の投稿への Like は通知しない
+        create_notification(
+            sender=instance.user,
+            recipient=instance.post.user,
+            notification_type=Notification.LIKE,
+            post=instance.post,
+        )
