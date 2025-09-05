@@ -110,7 +110,7 @@ def send_ios_notification(
 
         print(f"APNs 送信開始: devices={len(device_tokens)} title={title}")
 
-        response_list = client.send_notification_batch(notifications, topic)
+        response_list = client.send_notification_batch(notifications, client.topic)
 
         for token, response in response_list:
             status = response.get("status") or response.get("Status")
