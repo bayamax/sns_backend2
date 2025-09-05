@@ -261,15 +261,8 @@ class PostLikeView(APIView):
             liked = True
             print(f"いいねを作成: post_id={pk}, user={request.user.username}")
             
-            # 通知を作成（自分の投稿以外の場合）
-            if post.user != request.user:
-                print(f"いいね通知を作成: recipient={post.user.username}, sender={request.user.username}")
-                Notification.objects.create(
-                    recipient=post.user,
-                    sender=request.user,
-                    notification_type='like',
-                    post=post
-                )
+            # 通知は signals (notifications.utils.post_liked_notification) で自動作成されるため
+            # ここでは重複作成しない
         
         # 更新された投稿を返す
         updated_post = Post.objects.select_related('user').get(pk=pk)
@@ -320,16 +313,7 @@ class PostCommentsView(APIView):
             # コメントを保存
             reply = serializer.save()
             
-            # 通知の作成（投稿者への通知）
-            if parent_post.user != request.user:
-                from notifications.models import Notification
-                
-                Notification.objects.create(
-                    recipient=parent_post.user,
-                    sender=request.user,
-                    notification_type='reply',
-                    post=parent_post
-                )
+            # 通知は signals (notifications.utils.post_created_notification) で自動作成
             
             print(f"コメントを作成しました: ID {reply.id}")
             return Response(PostSerializer(reply, context={'request': request}).data, status=status.HTTP_201_CREATED)
