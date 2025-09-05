@@ -45,6 +45,7 @@ def create_notification(sender, recipient, notification_type, post=None, reply_p
         from .push import send_ios_notification
 
         device_tokens = list(recipient.devices.filter(platform="ios").values_list("token", flat=True))
+        print("DEBUG push tokens", device_tokens)
         if device_tokens:
             title_map = {
                 Notification.LIKE: "いいねされました",
