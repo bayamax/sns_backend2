@@ -65,6 +65,42 @@ def create_notification(sender, recipient, notification_type, post=None, reply_p
     
     return notification
 
+# ------------------------------
+# すべての通知作成後に Push 送信 (ビューから直接作られた場合も含む)
+# ------------------------------
+
+
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+
+@receiver(post_save, sender=Notification)
+def send_push_after_notification_created(sender, instance, created, **kwargs):
+    if not created:
+        return
+    try:
+        from .push import send_ios_notification
+
+        device_tokens = list(instance.recipient.devices.filter(platform="ios").values_list("token", flat=True))
+        print("DEBUG push tokens", device_tokens)
+        if not device_tokens:
+            return
+
+        title_map = {
+            Notification.LIKE: "いいねされました",
+            Notification.FOLLOW: "フォローされました",
+            Notification.REPLY: "返信が届きました",
+            Notification.MENTION: "メンションされました",
+        }
+        title = title_map.get(instance.notification_type, "お知らせ")
+        body = instance.post.content[:50] if instance.post else "SNS"
+        custom_data = {"notification_id": instance.id}
+        send_ios_notification(device_tokens, title, body, custom_data)
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).warning(f"Push notification post_save failed: {e}")
+
 
 def extract_mentions(content):
     """テキストからメンション(@username)を抽出する"""
