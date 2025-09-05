@@ -94,20 +94,42 @@ def send_ios_notification(
     if client is None:
         return
 
-    payload = Payload(alert={"title": title, "body": body}, sound="default", badge=1, custom=custom_data or {})
+    payload = Payload(
+        alert={
+            "title": title,
+            "body": body,
+        },
+        badge=1,  # 未読バッジ数を更新
+        sound="default",
+        custom_data=custom_data or {}
+    )
 
-    logger.debug(f"APNs 送信開始: devices={len(device_tokens)} title={title}")
-    response_list = client.send_notification_batch(payload, device_tokens, topic)
+    try:
+        # (token, payload) タプルのリストを準備
+        notifications = [(t, payload) for t in device_tokens]
 
-    # エラーハンドリング
-    for token, result in results.items():
-        if result["status"] != "Success":
-            reason = result.get("reason")
-            logger.warning(f"APNs 送信失敗 token={token} reason={reason}")
-            # 無効トークンはDBから削除 (410, 400 BadDeviceToken 等)
-            if reason in {"BadDeviceToken", "Unregistered", "DeviceTokenNotForTopic"}:
-                from .models import Device  # 遅延インポート
+        print(f"APNs 送信開始: devices={len(device_tokens)} title={title}")
 
-                Device.objects.filter(token=token).delete()
-        else:
-            logger.debug(f"APNs 送信成功 token={token}")
+        response_list = client.send_notification_batch(
+            notifications=notifications,
+            topic=topic
+        )
+
+        for token, response in response_list:
+            status = response.get("status") or response.get("Status")
+            reason = response.get("reason") or response.get("Reason")
+
+            if str(status) == "200":
+                print(f"APNs 送信成功 token={token[:10]}... status={status}")
+            else:
+                print(f"APNs 送信失敗 token={token[:10]}... status={status} reason={reason}")
+                # 無効なトークンはDBから削除
+                if reason in [BadDeviceToken.reason, Unregistered.reason, DeviceTokenNotForTopic.reason]:
+                    from notifications.models import Device
+                    Device.objects.filter(token=token).delete()
+                    print(f"無効なデバイストークンを削除しました: {token[:10]}...")
+
+    except Exception as e:
+        logger.error(
+            f"APNs 送信中に予期せぬエラーが発生しました: {e}", exc_info=True
+        )
