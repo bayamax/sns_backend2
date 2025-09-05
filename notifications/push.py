@@ -105,26 +105,24 @@ def send_ios_notification(
     )
 
     try:
-        # (token, payload) タプルのリストを準備
-        notifications = [(t, payload) for t in device_tokens]
-
         print(f"APNs 送信開始: devices={len(device_tokens)} title={title}")
 
-        response_list = client.send_notification_batch(notifications, client.topic)
+        for token in device_tokens:
+            try:
+                response = client.send_notification(token, payload, client.topic)
+                status = getattr(response, "status", None) or response.get("status")
+                reason = getattr(response, "description", None) or response.get("reason")
 
-        for token, response in response_list:
-            status = response.get("status") or response.get("Status")
-            reason = response.get("reason") or response.get("Reason")
-
-            if str(status) == "200":
-                print(f"APNs 送信成功 token={token[:10]}... status={status}")
-            else:
-                print(f"APNs 送信失敗 token={token[:10]}... status={status} reason={reason}")
-                # 無効なトークンはDBから削除
-                if reason in [BadDeviceToken.reason, Unregistered.reason, DeviceTokenNotForTopic.reason]:
-                    from notifications.models import Device
-                    Device.objects.filter(token=token).delete()
-                    print(f"無効なデバイストークンを削除しました: {token[:10]}...")
+                if str(status) == "200":
+                    print(f"APNs 送信成功 token={token[:10]}... status={status}")
+                else:
+                    print(f"APNs 送信失敗 token={token[:10]}... status={status} reason={reason}")
+                    if reason in [BadDeviceToken.reason, Unregistered.reason, DeviceTokenNotForTopic.reason]:
+                        from notifications.models import Device
+                        Device.objects.filter(token=token).delete()
+                        print(f"無効なデバイストークンを削除しました: {token[:10]}...")
+            except Exception as ex:
+                print(f"APNs 個別送信エラー token={token[:10]}... err={ex}")
 
     except Exception as e:
         logger.error(
