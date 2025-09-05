@@ -52,13 +52,12 @@ def _get_client() -> APNsClient | None:
     use_sandbox = os.getenv("DJANGO_DEBUG", "False") == "True"
 
     try:
-        client = APNsClient(
-            key_path,
-            key_id=key_id,
-            team_id=team_id,
-            use_sandbox=use_sandbox,
-            use_alternative_port=False,
-        )
+        # apns2 0.7.x は TokenCredentials を使用
+        from apns2.credentials import TokenCredentials
+
+        credentials = TokenCredentials(auth_key_path=key_path, auth_key_id=key_id, team_id=team_id)
+
+        client = APNsClient(credentials=credentials, use_sandbox=use_sandbox)
         client.topic = topic
         return client
     except Exception as e:
@@ -98,7 +97,7 @@ def send_ios_notification(
     payload = Payload(alert={"title": title, "body": body}, sound="default", badge=1, custom=custom_data or {})
 
     logger.debug(f"APNs 送信開始: devices={len(device_tokens)} title={title}")
-    results = client.send_notification_batch([(token, payload) for token in device_tokens], client.topic)
+    response_list = client.send_notification_batch(payload, device_tokens, topic)
 
     # エラーハンドリング
     for token, result in results.items():
