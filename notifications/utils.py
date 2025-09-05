@@ -40,28 +40,7 @@ def create_notification(sender, recipient, notification_type, post=None, reply_p
         reply_post=reply_post
     )
 
-    # デバイストークン取得 & プッシュ送信
-    try:
-        from .push import send_ios_notification
-
-        device_tokens = list(recipient.devices.filter(platform="ios").values_list("token", flat=True))
-        print("DEBUG push tokens", device_tokens)
-        if device_tokens:
-            title_map = {
-                Notification.LIKE: "いいねされました",
-                Notification.FOLLOW: "フォローされました",
-                Notification.REPLY: "返信が届きました",
-                Notification.MENTION: "メンションされました",
-            }
-            title = title_map.get(notification_type, "お知らせ")
-            body = post.content[:50] if post else "SNS"
-            custom_data = {"notification_id": notification.id}
-            send_ios_notification(device_tokens, title, body, custom_data)
-    except Exception as e:
-        # プッシュ送信失敗はエラーを握りつぶしてログのみ
-        import logging
-
-        logging.getLogger(__name__).warning(f"Push notification failed: {e}")
+    # push 通知は post_save レシーバーで一元的に送信する
     
     return notification
 
@@ -69,6 +48,9 @@ def create_notification(sender, recipient, notification_type, post=None, reply_p
 # すべての通知作成後に Push 送信 (ビューから直接作られた場合も含む)
 # ------------------------------
 
+
+# 重複送信を防ぐためのキャッシュ
+from django.core.cache import cache
 
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -78,6 +60,13 @@ from django.dispatch import receiver
 def send_push_after_notification_created(sender, instance, created, **kwargs):
     if not created:
         return
+    # --- 重複ガード: 同一イベントは10秒以内に再送しない ---
+    cache_key = f"push_lock:{instance.notification_type}:{instance.sender_id}:{instance.recipient_id}:{instance.post_id}"
+    if cache.get(cache_key):
+        print("[Push] duplicate suppressed", cache_key)
+        return
+    cache.set(cache_key, 1, timeout=10)
+
     try:
         from .push import send_ios_notification
 
@@ -91,7 +80,7 @@ def send_push_after_notification_created(sender, instance, created, **kwargs):
             pass
 
         device_tokens = list(instance.recipient.devices.filter(platform="ios").values_list("token", flat=True))
-        logger.info("DEBUG push tokens %s", device_tokens)
+        print("DEBUG push tokens", device_tokens)
         if not device_tokens:
             return
 
