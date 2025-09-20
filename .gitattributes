@@ -1,3 +1,8 @@
 *.pt filter=lfs diff=lfs merge=lfs -text
 recommendations/pretrained/.npy filter=lfs diff=lfs merge=lfs -text
 recommendations/pretrained/*.npy filter=lfs diff=lfs merge=lfs -text
+recommendations/pretrained/*.pt filter=lfs diff=lfs merge=lfs -text
+recommendations/pretrained/*.pth filter=lfs diff=lfs merge=lfs -text
+\# filter=lfs diff=lfs merge=lfs -text
+codebook filter=lfs diff=lfs merge=lfs -text
+も大きい場合 filter=lfs diff=lfs merge=lfs -text
