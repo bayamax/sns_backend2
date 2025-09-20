@@ -1,4 +1,5 @@
 import os, time, numpy as np, torch, torch.nn as nn
+from typing import Optional
 import torch.nn.functional as F
 from sklearn.metrics import pairwise_distances_argmin
 from django.core.management.base import BaseCommand
@@ -32,7 +33,24 @@ def find_latest_codebook(dir_path: str) -> str:
     latest = max(files, key=lambda s: int(s.split("_k")[1].split(".")[0]))
     return os.path.join(dir_path, latest)
 
-CODEBOOK_PATH = find_latest_codebook(PRETRAIN_DIR)
+def find_codebook_by_k(dir_path: str, k: int) -> Optional[str]:
+    path = os.path.join(dir_path, f"codebook_k{k}.npy")
+    return path if os.path.exists(path) else None
+
+def resolve_predictor_ckpt(dir_path: str) -> Optional[str]:
+    search_dirs = [
+        dir_path,
+        os.path.join(settings.BASE_DIR, "follow_predictor_outputs"),
+        os.path.join(settings.BASE_DIR, "recommendations", "follow_predictor_outputs"),
+    ]
+    for d in search_dirs:
+        # 正しいモデルが follow_mlp.pt のため、こちらを優先
+        for name in ("follow_mlp.pt", "follow_predictor.pt"):
+            path = os.path.join(d, name)
+            if os.path.exists(path):
+                return path
+    return None
+
 ENCODER_CKPT = os.path.join(PRETRAIN_DIR, "checkpoint.pth")
 PREDICTOR_CKPT = os.path.join(PRETRAIN_DIR, "follow_predictor.pt")
 
@@ -47,15 +65,17 @@ PARAMS = dict(
 )
 
 class MAB(nn.Module):
-    def __init__(self, d: int, heads: int):
+    def __init__(self, d: int, heads: int, drop: float):
         super().__init__()
         self.q = nn.Linear(d, d)
         self.k = nn.Linear(d, d)
         self.v = nn.Linear(d, d)
-        self.att = nn.MultiheadAttention(d, heads, batch_first=True)
+        self.att = nn.MultiheadAttention(d, heads, dropout=drop, batch_first=True)
         self.ln1 = nn.LayerNorm(d)
         self.ln2 = nn.LayerNorm(d)
-        self.ff = nn.Sequential(nn.Linear(d, 2 * d), nn.GELU(), nn.Linear(2 * d, d))
+        self.ff = nn.Sequential(
+            nn.Linear(d, 2 * d), nn.GELU(), nn.Dropout(drop), nn.Linear(2 * d, d)
+        )
 
     def forward(self, Q, K, mask=None):
         q, k, v = self.q(Q), self.k(K), self.v(K)
@@ -67,8 +87,8 @@ class ISAB(nn.Module):
     def __init__(self, d: int, heads: int, induce: int):
         super().__init__()
         self.I = nn.Parameter(torch.randn(1, induce, d))
-        self.m1 = MAB(d, heads)
-        self.m2 = MAB(d, heads)
+        self.m1 = MAB(d, heads, PARAMS["dropout"])
+        self.m2 = MAB(d, heads, PARAMS["dropout"])
 
     def forward(self, X, mask):
         H = self.m1(self.I.repeat(X.size(0), 1, 1), X, mask)
@@ -78,7 +98,7 @@ class PMA(nn.Module):
     def __init__(self, d: int, heads: int):
         super().__init__()
         self.S = nn.Parameter(torch.randn(1, 1, d))
-        self.m = MAB(d, heads)
+        self.m = MAB(d, heads, PARAMS["dropout"])
 
     def forward(self, X, mask):
         return self.m(self.S.repeat(X.size(0), 1, 1), X, mask)
@@ -93,12 +113,16 @@ class Encoder(nn.Module):
         )
         self.pma = PMA(D, PARAMS["n_heads"])
         self.proj = nn.Linear(D, PARAMS["profile_dim"])
+        # 学習時と同じヘッド/ドロップアウトを持たせて厳密ロードに一致させる
+        self.cls = nn.Linear(D, K)
+        self.drop = nn.Dropout(PARAMS["dropout"])
 
     def forward(self, x, mask):
         h = self.emb(x)
         for l in self.layers:
             h = l(h, mask)
-        p = self.proj(self.pma(h, mask).squeeze(1))
+        _ = self.cls(self.drop(h))  # 学習時互換のために前向きに通すが出力は使用しない
+        p = self.proj(self.drop(self.pma(h, mask).squeeze(1)))
         return p
 
 class FollowPredictorMLP(nn.Module):
@@ -297,24 +321,90 @@ class Command(BaseCommand):
         )
 
         # Step 0: モデル & 資材ロード
-        if not (os.path.exists(CODEBOOK_PATH) and os.path.exists(ENCODER_CKPT) and os.path.exists(PREDICTOR_CKPT)):
-            self.log("[ERROR] codebook / encoder / predictor のファイルが見つかりません。PRETRAIN_DIR を確認してください。")
+        if not os.path.exists(ENCODER_CKPT):
+            self.log(f"[ERROR] encoder checkpoint が見つかりません: {ENCODER_CKPT}")
             return
 
-        codebook = np.load(CODEBOOK_PATH)
-        K = codebook.shape[0]
+        # 0-1) エンコーダ ckpt から K を推定
+        raw_ckpt = torch.load(ENCODER_CKPT, map_location="cpu")
+        enc_state = raw_ckpt.get("model", raw_ckpt)
+        # DataParallel 由来の 'module.' 接頭辞を除去
+        if isinstance(enc_state, dict) and any(k.startswith("module.") for k in enc_state.keys()):
+            enc_state = {k.replace("module.", "", 1): v for k, v in enc_state.items()}
+        K_from_ckpt = None
+        for k, v in enc_state.items():
+            if k.endswith("emb.weight") and hasattr(v, "shape"):
+                # emb の語彙サイズは K+2（PAD含む）
+                K_from_ckpt = int(v.shape[0]) - 2
+                break
+
+        # 0-2) codebook を K に合わせて解決
+        codebook_path = None
+        if K_from_ckpt is not None:
+            codebook_path = find_codebook_by_k(PRETRAIN_DIR, K_from_ckpt)
+            if not codebook_path:
+                # 一致するものが無ければ最新を使うが、後で不一致ならエラーにする
+                try:
+                    codebook_path = find_latest_codebook(PRETRAIN_DIR)
+                except Exception as e:
+                    self.log(f"[ERROR] codebook が見つかりません: {e}")
+                    return
+        else:
+            # K が取れなかった場合は従来どおり最新を使う
+            try:
+                codebook_path = find_latest_codebook(PRETRAIN_DIR)
+            except Exception as e:
+                self.log(f"[ERROR] codebook が見つかりません: {e}")
+                return
+
+        if not codebook_path or not os.path.exists(codebook_path):
+            self.log(f"[ERROR] codebook パスを解決できませんでした: {codebook_path}")
+            return
+
+        codebook = np.load(codebook_path)
+        K = int(codebook.shape[0])
+        if K_from_ckpt is not None and K_from_ckpt != K:
+            self.log(
+                f"[ERROR] codebook の次元 K={K} と checkpoint の K={K_from_ckpt} が不一致です。"
+                f" 対応する codebook_k{K_from_ckpt}.npy を {PRETRAIN_DIR} に配置してください。"
+            )
+            return
+
         PAD_ID = K + 1
 
         encoder = Encoder(K, PAD_ID)
-        enc_ckpt = torch.load(ENCODER_CKPT, map_location="cpu")
-        if "model" in enc_ckpt:
-            enc_ckpt = enc_ckpt["model"]
-        encoder.load_state_dict(enc_ckpt, strict=False)
+        try:
+            encoder.load_state_dict(enc_state, strict=True)
+        except Exception as e:
+            self.log(f"[ERROR] Encoder の重み読み込みに失敗しました (strict=True): {e}")
+            return
         encoder.to(device).eval()
 
+        # 0-3) 予測器 ckpt 解決（follow_predictor.pt / follow_mlp.pt どちらでも）
+        predictor_ckpt_path = resolve_predictor_ckpt(PRETRAIN_DIR)
+        if not predictor_ckpt_path:
+            self.log(f"[ERROR] predictor のチェックポイントが見つかりません ({PRETRAIN_DIR})")
+            return
+        raw_pred = torch.load(predictor_ckpt_path, map_location="cpu")
+        if isinstance(raw_pred, dict) and ("model" in raw_pred or "state_dict" in raw_pred):
+            pred_state = raw_pred.get("model", raw_pred.get("state_dict", raw_pred))
+        else:
+            pred_state = raw_pred
+        # DataParallel 由来の 'module.' 接頭辞を除去
+        if isinstance(pred_state, dict) and any(k.startswith("module.") for k in pred_state.keys()):
+            pred_state = {k.replace("module.", "", 1): v for k, v in pred_state.items()}
+
         predictor = FollowPredictorMLP().to(device)
-        predictor.load_state_dict(torch.load(PREDICTOR_CKPT, map_location="cpu"))
+        try:
+            predictor.load_state_dict(pred_state, strict=True)
+        except Exception as e:
+            self.log(f"[ERROR] Predictor の重み読み込みに失敗しました (strict=True): {e}")
+            return
         predictor.eval()
+
+        self.log(f"📦 使用 codebook: {os.path.basename(codebook_path)} (K={K})")
+        self.log(f"📦 使用 encoder ckpt: {os.path.basename(ENCODER_CKPT)} (K={K_from_ckpt or K})")
+        self.log(f"📦 使用 predictor ckpt: {os.path.basename(predictor_ckpt_path)}")
 
         # 1. 投稿埋め込み補完
         self.rebuild_post_embeddings()
