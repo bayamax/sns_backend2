@@ -15,6 +15,12 @@ def maybe_generate_recommendations(sender, instance, created, **kwargs):
     """新規投稿時に一定確率で推薦再計算コマンドをバックグラウンド実行"""
     if not created:
         return
+
+    # 初回投稿は必ずリコメンド生成をキック
+    if Post.objects.filter(user_id=instance.user_id).count() == 1:
+        _trigger_recommendations_job()
+        return
+
     if random.random() >= TRIGGER_PROB:
         return
 
