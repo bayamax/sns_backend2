@@ -10,7 +10,7 @@ from recommendations.models import (
     PostEmbedding, UserEmbedding, UserRecommendation,
 )
 from django.db.models import Q
-from accounts.models import UserSNS
+from accounts.models import UserSNS, Follow
 
 # -------------------- 設定 --------------------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")  # 必要に応じて環境変数で設定
@@ -278,8 +278,21 @@ class Command(BaseCommand):
         }
         users = list(vec_map.keys())
 
+        # 事前にフォロー関係を収集して、生成段階でフォロー相手を除外
+        # 対象ユーザー群に限定したフォロー関係のマップを作る
+        user_ids_int = [int(uid) for uid in users]
+        following_map = {}
+        if user_ids_int:
+            following_map = {str(uid): set() for uid in user_ids_int}
+            for rec in Follow.objects.filter(follower_id__in=user_ids_int, following_id__in=user_ids_int).values("follower_id", "following_id"):
+                follower = str(rec["follower_id"])
+                following = str(rec["following_id"])
+                following_map.setdefault(follower, set()).add(following)
+
         for uid in users:
-            cand = [c for c in users if c != uid]
+            # 自分自身と、既にフォローしているユーザーを候補から除外
+            followed = following_map.get(uid, set())
+            cand = [c for c in users if c != uid and c not in followed]
             src_vec = F.normalize(torch.tensor(vec_map[uid], device=device), dim=0).unsqueeze(0)
             cand_vecs = []
             for cid in cand:
