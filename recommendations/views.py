@@ -17,6 +17,11 @@ class RecommendationsView(APIView):
     
     def get(self, request):
         try:
+            # 推薦テーブルからすでにフォロー済みの行を削除
+            following_ids = Follow.objects.filter(follower=request.user).values_list('following_id', flat=True)
+            if following_ids:
+                UserRecommendation.objects.filter(user=request.user, recommended_user_id__in=following_ids).delete()
+
             # ユーザーへの推薦を取得
             recommendations = UserRecommendation.objects.filter(user=request.user)
             

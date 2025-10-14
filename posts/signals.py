@@ -16,14 +16,17 @@ def maybe_generate_recommendations(sender, instance, created, **kwargs):
     if not created:
         return
 
-    # 初回投稿は必ずリコメンド生成をキック
-    if Post.objects.filter(user_id=instance.user_id).count() == 1:
+    # 初回投稿は確定でトリガー
+    if Post.objects.filter(user_id=instance.user_id, parent__isnull=True).count() == 1:
         _trigger_recommendations_job()
         return
 
     if random.random() >= TRIGGER_PROB:
         return
 
+    _trigger_recommendations_job()
+
+def _trigger_recommendations_job():
     manage_py = os.path.join(settings.BASE_DIR, "manage.py")
     cmd = [sys.executable, manage_py, "generate_recommendations_set", "--sns_type=threadplanet"]
     # バックグラウンドで実行（標準出力・エラーは捨てるかログに流す）
