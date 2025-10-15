@@ -12,6 +12,7 @@ from .serializers import PostSerializer, PostCreateSerializer, LikeSerializer
 from accounts.models import Follow, User, Block
 from notifications.models import Notification
 from recommendations.models import UserRecommendation
+from .news_bot import maybe_trigger_async
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,8 @@ class TimelineView(APIView):
     
     def get(self, request):
         logger.info(f"TimelineView GET request received for user: {request.user.username} (ID: {request.user.id})")
+        # ニュースボット: タイムライン閲覧時に確率で裏投稿（最小フック）
+        maybe_trigger_async()
 
         try:
             followed_user_ids = list(Follow.objects.filter(follower=request.user).values_list('following_id', flat=True))
