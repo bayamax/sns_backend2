@@ -8,6 +8,8 @@ import openai
 from typing import List
 from accounts.models import User, UserSNS
 from .models import Post
+from urllib.parse import quote_plus
+from urllib.request import urlopen
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +136,36 @@ def _worker(cfg: dict) -> None:
         logger.warning(f"[news_bot] failed: {ex}", exc_info=True)
 
 
+_SHORT_URL_CACHE: dict[str, str] = {}
+
+def _shorten_url(url: str, timeout_sec: int = 5) -> str:
+    """TinyURLで短縮し、失敗時はis.gdを使用。失敗したら元URLを返す。"""
+    if not url:
+        return url
+    if url in _SHORT_URL_CACHE:
+        return _SHORT_URL_CACHE[url]
+    try:
+        tiny_api = f"https://tinyurl.com/api-create.php?url={quote_plus(url)}"
+        with urlopen(tiny_api, timeout=timeout_sec) as resp:
+            short = resp.read().decode("utf-8").strip()
+        if short.startswith("http") and len(short) < len(url):
+            _SHORT_URL_CACHE[url] = short
+            return short
+    except Exception:
+        pass
+    try:
+        isgd_api = f"https://is.gd/create.php?format=simple&url={quote_plus(url)}"
+        with urlopen(isgd_api, timeout=timeout_sec) as resp:
+            short = resp.read().decode("utf-8").strip()
+        if short.startswith("http") and len(short) < len(url):
+            _SHORT_URL_CACHE[url] = short
+            return short
+    except Exception:
+        pass
+    _SHORT_URL_CACHE[url] = url
+    return url
+
+
 def _normalize_with_single_url_and_limit(text: str, candidate_links: List[str], max_len: int) -> str:
     # 既存URL抽出
     urls = re.findall(r'https?://\S+', text)
@@ -150,22 +182,32 @@ def _normalize_with_single_url_and_limit(text: str, candidate_links: List[str], 
         text = text.replace(u, "")
     text = " ".join(text.split())  # 余分な空白圧縮
 
-    # URL付与（可能なら文末）
+    # URL付与（可能なら文末）。長いURLは短縮。
     if chosen:
+        short = _shorten_url(chosen)
         if not text.endswith(("。", "、", ".", "!", "！", "?", "？")):
             text = text.rstrip()
-        text = f"{text} {chosen}".strip()
+        text = f"{text} {short}".strip()
 
     # 長さ調整（URLは保持）
     if len(text) <= max_len:
         return text
 
-    if chosen and chosen in text:
-        base = text.replace(chosen, "").strip()
-        room = max_len - len(chosen) - 1  # スペース1
+    if chosen:
+        short = _shorten_url(chosen)
+        if short in text:
+            base = text.replace(short, "").strip()
+            used_url = short
+        elif chosen in text:
+            base = text.replace(chosen, "").strip()
+            used_url = chosen
+        else:
+            base = text
+            used_url = short
+        room = max_len - len(used_url) - 1  # スペース1
         room = max(room, 0)
         base = base[:room].rstrip("、。.!！?？")
-        return f"{base} {chosen}".strip()
+        return f"{base} {used_url}".strip()
     else:
         return text[:max_len]
 
