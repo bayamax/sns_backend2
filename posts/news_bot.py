@@ -44,7 +44,95 @@ BOTS = [
             "https://news.google.com/rss/search?q=%E7%B5%8C%E6%B8%88&hl=ja&gl=JP&ceid=JP:ja",
         ],
         "model": "gpt-4o",
-        "prob_timeline": 0.01,   # 1%
+        "prob_timeline": 0.02,   # 1%
+        "max_len_ja": 250,
+    },
+    {
+        "enabled": True,
+        "theme": "World Politics News",
+        "username": "world_politics_news",
+        "rss_list": [
+            "https://news.google.com/rss/search?q=World%20Politics%20News&hl=ja&gl=JP&ceid=JP:ja",
+        ],
+        "model": "gpt-4o",
+        "prob_timeline": 0.02,   # 2%
+        "max_len_ja": 250,
+    },
+    {
+        "enabled": True,
+        "theme": "Job Career News",
+        "username": "job_career_news",
+        "rss_list": [
+            "https://news.google.com/rss/search?q=Job%20Career%20News&hl=ja&gl=JP&ceid=JP:ja",
+        ],
+        "model": "gpt-4o",
+        "prob_timeline": 0.02,
+        "max_len_ja": 250,
+    },
+    {
+        "enabled": True,
+        "theme": "Tech & Dev News",
+        "username": "tech_dev_news",
+        "rss_list": [
+            "https://news.google.com/rss/search?q=Tech%20%26%20Dev%20News&hl=ja&gl=JP&ceid=JP:ja",
+        ],
+        "model": "gpt-4o",
+        "prob_timeline": 0.02,
+        "max_len_ja": 250,
+    },
+    {
+        "enabled": True,
+        "theme": "Art News",
+        "username": "art_news",
+        "rss_list": [
+            "https://news.google.com/rss/search?q=Art%20News&hl=ja&gl=JP&ceid=JP:ja",
+        ],
+        "model": "gpt-4o",
+        "prob_timeline": 0.02,
+        "max_len_ja": 250,
+    },
+    {
+        "enabled": True,
+        "theme": "Anime News",
+        "username": "anime_news",
+        "rss_list": [
+            "https://news.google.com/rss/search?q=Anime%20News&hl=ja&gl=JP&ceid=JP:ja",
+        ],
+        "model": "gpt-4o",
+        "prob_timeline": 0.02,
+        "max_len_ja": 250,
+    },
+    {
+        "enabled": True,
+        "theme": "Indie Games News",
+        "username": "indie_games_news",
+        "rss_list": [
+            "https://news.google.com/rss/search?q=Indie%20Games%20News&hl=ja&gl=JP&ceid=JP:ja",
+        ],
+        "model": "gpt-4o",
+        "prob_timeline": 0.02,
+        "max_len_ja": 250,
+    },
+    {
+        "enabled": True,
+        "theme": "Food News",
+        "username": "food_news",
+        "rss_list": [
+            "https://news.google.com/rss/search?q=Food%20News&hl=ja&gl=JP&ceid=JP:ja",
+        ],
+        "model": "gpt-4o",
+        "prob_timeline": 0.02,
+        "max_len_ja": 250,
+    },
+    {
+        "enabled": True,
+        "theme": "Company & Events News",
+        "username": "company_events_news",
+        "rss_list": [
+            "https://news.google.com/rss/search?q=Company%20%26%20Events%20News&hl=ja&gl=JP&ceid=JP:ja",
+        ],
+        "model": "gpt-4o",
+        "prob_timeline": 0.02,
         "max_len_ja": 250,
     },
 ]

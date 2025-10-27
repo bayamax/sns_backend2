@@ -10,6 +10,7 @@ from recommendations.models import (
     PostEmbedding, UserEmbedding, UserRecommendation,
 )
 from django.db.models import Q
+from django.db.models import F as DJF
 from accounts.models import UserSNS, Follow
 
 # -------------------- 設定 --------------------
@@ -314,6 +315,12 @@ class Command(BaseCommand):
                 )
         self.log("✅ 推薦再計算 完了")
 
+        # --- 相互最良ブースト（後処理）---
+        try:
+            self._boost_mutual_top1([int(u) for u in users])
+        except Exception as e:
+            self.log(f"[WARN] 相互最良ブーストでエラー: {e}")
+
     # ---------- メイン ----------
     def handle(self, *args, **opt):
         t0 = time.time()
@@ -429,3 +436,51 @@ class Command(BaseCommand):
         self.rebuild_recommendations(predictor, device, opt["top_k"])
 
         self.log(f"🎉 ALL DONE in {time.time() - t0:.1f}s")
+
+    # ---------- 後処理: 相互最良を先頭化するためのブースト ----------
+    def _boost_mutual_top1(self, user_ids):
+        """各ユーザーについて、相互（互いのtop-kに入っている）候補のうち
+        mutual_score=min(self.score, partner.score) が最大の1件だけ follow_probability を大幅にブーストする。
+        保存値を更新するが、その他のロジックやAPI形式は変更しない。
+        """
+        # ブースト強度（フロントの降順ソートで必ず先頭化される程度の十分大きな値）
+        BASE_BOOST = 100000.0
+        SCALE = 1000.0  # mutual_score(0..1) に対する微調整
+
+        boosted = 0
+        for uid in user_ids:
+            # 自分のtop-kに保存されているレコードを取得
+            recs = list(UserRecommendation.objects.filter(user_id=uid))
+            if not recs:
+                continue
+
+            # 相手→自分のレコードを一括取得
+            cand_ids = [r.recommended_user_id for r in recs]
+            partners = UserRecommendation.objects.filter(user_id__in=cand_ids, recommended_user_id=uid)
+            partner_map = {r.user_id: r for r in partners}
+
+            # 相互候補から mutual_score 最大の1件を選ぶ
+            best_rec = None
+            best_mutual = -1.0
+            best_self = -1.0
+            for r in recs:
+                p = partner_map.get(r.recommended_user_id)
+                if not p:
+                    continue
+                mutual = r.score if r.score < p.score else p.score  # min(r.score, p.score)
+                if mutual > best_mutual or (mutual == best_mutual and r.score > best_self):
+                    best_mutual = mutual
+                    best_self = r.score
+                    best_rec = r
+
+            if best_rec is None:
+                continue
+
+            boost_value = BASE_BOOST + best_mutual * SCALE
+            # 1件だけ大幅ブースト（保存値を上書き）。F式で原子更新
+            UserRecommendation.objects.filter(pk=best_rec.pk).update(
+                follow_probability=DJF('follow_probability') + boost_value
+            )
+            boosted += 1
+
+        self.log(f"✨ 相互最良ブースト 完了 (対象 {len(user_ids)} ユーザー中 {boosted} 件)")
