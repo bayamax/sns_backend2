@@ -1,4 +1,5 @@
 import re
+import json
 import logging
 import random
 import threading
@@ -33,7 +34,7 @@ BOTS = [
             "https://news.google.com/rss/search?q=AI&hl=ja&gl=JP&ceid=JP:ja",
         ],
         "model": "gpt-4o",
-        "prob_timeline": 0.02,   # タイムライン閲覧1回あたり 2%
+        "prob_timeline": 0.01,   # タイムライン閲覧1回あたり 2%
         "max_len_ja": 250,       # URL含めて最大250字に収める
     },
     {
@@ -44,7 +45,7 @@ BOTS = [
             "https://news.google.com/rss/search?q=%E7%B5%8C%E6%B8%88&hl=ja&gl=JP&ceid=JP:ja",
         ],
         "model": "gpt-4o",
-        "prob_timeline": 0.02,   # 1%
+        "prob_timeline": 0.01,   # 1%
         "max_len_ja": 250,
     },
     {
@@ -55,7 +56,7 @@ BOTS = [
             "https://news.google.com/rss/search?q=World%20Politics%20News&hl=ja&gl=JP&ceid=JP:ja",
         ],
         "model": "gpt-4o",
-        "prob_timeline": 0.02,   # 2%
+        "prob_timeline": 0.01,   # 2%
         "max_len_ja": 250,
     },
     {
@@ -66,7 +67,7 @@ BOTS = [
             "https://news.google.com/rss/search?q=Job%20Career%20News&hl=ja&gl=JP&ceid=JP:ja",
         ],
         "model": "gpt-4o",
-        "prob_timeline": 0.02,
+        "prob_timeline": 0.01,
         "max_len_ja": 250,
     },
     {
@@ -77,7 +78,7 @@ BOTS = [
             "https://news.google.com/rss/search?q=Tech%20%26%20Dev%20News&hl=ja&gl=JP&ceid=JP:ja",
         ],
         "model": "gpt-4o",
-        "prob_timeline": 0.02,
+        "prob_timeline": 0.01,
         "max_len_ja": 250,
     },
     {
@@ -88,7 +89,7 @@ BOTS = [
             "https://news.google.com/rss/search?q=Art%20News&hl=ja&gl=JP&ceid=JP:ja",
         ],
         "model": "gpt-4o",
-        "prob_timeline": 0.02,
+        "prob_timeline": 0.01,
         "max_len_ja": 250,
     },
     {
@@ -99,7 +100,7 @@ BOTS = [
             "https://news.google.com/rss/search?q=Anime%20News&hl=ja&gl=JP&ceid=JP:ja",
         ],
         "model": "gpt-4o",
-        "prob_timeline": 0.02,
+        "prob_timeline": 0.01,
         "max_len_ja": 250,
     },
     {
@@ -110,7 +111,7 @@ BOTS = [
             "https://news.google.com/rss/search?q=Indie%20Games%20News&hl=ja&gl=JP&ceid=JP:ja",
         ],
         "model": "gpt-4o",
-        "prob_timeline": 0.02,
+        "prob_timeline": 0.01,
         "max_len_ja": 250,
     },
     {
@@ -121,7 +122,7 @@ BOTS = [
             "https://news.google.com/rss/search?q=Food%20News&hl=ja&gl=JP&ceid=JP:ja",
         ],
         "model": "gpt-4o",
-        "prob_timeline": 0.02,
+        "prob_timeline": 0.01,
         "max_len_ja": 250,
     },
     {
@@ -132,7 +133,7 @@ BOTS = [
             "https://news.google.com/rss/search?q=Company%20%26%20Events%20News&hl=ja&gl=JP&ceid=JP:ja",
         ],
         "model": "gpt-4o",
-        "prob_timeline": 0.02,
+        "prob_timeline": 0.01,
         "max_len_ja": 250,
     },
 ]
@@ -150,6 +151,63 @@ def maybe_trigger_async() -> None:
             threading.Thread(target=_worker, args=(cfg,), daemon=True).start()
 
 
+def _build_google_news_rss(query: str, hl: str = "ja", gl: str = "JP", ceid: str = "JP:ja") -> str:
+    """Google News の検索RSS URLを作成。"""
+    q = quote_plus(query.strip())
+    return f"https://news.google.com/rss/search?q={q}&hl={hl}&gl={gl}&ceid={ceid}"
+
+
+def _generate_queries_with_llm(theme: str, model: str, k: int = 3) -> List[str]:
+    """LLMでGoogle News向けの日本語検索クエリをk件生成。失敗時は[theme]を返す。"""
+    try:
+        if not OPENAI_API_KEY or OPENAI_API_KEY == "REPLACE_WITH_YOUR_OPENAI_KEY":
+            return [theme]
+
+        # 軽量・決定性高めのプロンプト
+        sys = (
+            "You are an expert Japanese news researcher. "
+            "Return only a JSON array of strings (no extra text)."
+        )
+        usr = (
+            f"テーマ『{theme}』に関する最新動向を効率よく網羅するため、" 
+            f"Google News検索に適した日本語クエリを{max(1, int(k))}個提案してください。" 
+            "各クエリは2〜6語、一般名詞＋関連キーワードを組み合わせ、重複や装飾は避けてください。" 
+            "必ずJSON配列（例: [\"生成AI 規制\", \"半導体 需給\"]）のみを返してください。"
+        )
+
+        resp = openai.ChatCompletion.create(
+            model=model or "gpt-4o",
+            messages=[
+                {"role": "system", "content": sys},
+                {"role": "user", "content": usr},
+            ],
+            temperature=0.2,
+            max_tokens=200,
+        )
+        content = (resp["choices"][0]["message"]["content"] or "").strip()
+        queries: List[str] = []
+        try:
+            data = json.loads(content)
+            if isinstance(data, list):
+                queries = [str(x).strip() for x in data if str(x).strip()]
+        except Exception:
+            # JSONでなければ改行分割で回収
+            queries = [s.strip("- ・\n ") for s in content.splitlines() if s.strip()]
+
+        # 正規化・重複除去・件数制限
+        uniq = []
+        seen = set()
+        for q in queries:
+            if q and q not in seen:
+                seen.add(q)
+                uniq.append(q)
+            if len(uniq) >= k:
+                break
+        return uniq or [theme]
+    except Exception:
+        return [theme]
+
+
 def _worker(cfg: dict) -> None:
     try:
         if not OPENAI_API_KEY or OPENAI_API_KEY == "REPLACE_WITH_YOUR_OPENAI_KEY":
@@ -158,8 +216,18 @@ def _worker(cfg: dict) -> None:
         openai.api_key = OPENAI_API_KEY
 
         theme = cfg["theme"]
-        rss_list = cfg.get("rss_list") or [
-            f"https://news.google.com/rss/search?q={theme}&hl=ja&gl=JP&ceid=JP:ja"
+
+        # --- LLM で検索クエリを自動生成（失敗時はフォールバック） ---
+        generated_queries = _generate_queries_with_llm(
+            theme=theme,
+            model=cfg.get("query_model") or cfg.get("model", "gpt-4o"),
+            k=3,
+        )
+        # 既存の固定RSS + 生成クエリのRSS を合成（重複除去）
+        rss_from_cfg = cfg.get("rss_list") or []
+        rss_from_llm = [_build_google_news_rss(q) for q in generated_queries]
+        rss_list = list({*rss_from_cfg, *rss_from_llm}) or [
+            _build_google_news_rss(theme)
         ]
 
         # RSS候補収集（各フィードから上位数件）
