@@ -47,3 +47,31 @@ class UserEmbedding(models.Model):
     
     def __str__(self):
         return f"Embeddings for user {self.user.username}"
+
+class Community(models.Model):
+    """コミュニティモデル"""
+    name = models.CharField(max_length=100, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return self.name or f"Community {self.id}"
+
+class CommunityMembership(models.Model):
+    """ユーザーのコミュニティ所属を管理するモデル"""
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='community_membership'
+    )
+    community = models.ForeignKey(
+        Community,
+        on_delete=models.CASCADE,
+        related_name='members'
+    )
+    assigned_at = models.DateTimeField(auto_now=True)
+    is_settled = models.BooleanField(default=False)  # 定住フラグ
+    settled_at = models.DateTimeField(null=True, blank=True)  # 定住日時
+    
+    def __str__(self):
+        status = "定住" if self.is_settled else "放浪"
+        return f"{self.user.username} in Community {self.community.id} ({status})"

@@ -3,11 +3,12 @@
 from rest_framework import status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .models import UserRecommendation, UserEmbedding
+from .models import UserRecommendation, UserEmbedding, CommunityMembership
 from .serializers import UserRecommendationSerializer
 from accounts.models import Follow, Block
 from django.db.models import Q
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 
 User = get_user_model()
 
@@ -98,3 +99,45 @@ class VectorGenerationView(APIView):
 #     def handle(self, *args, **options):
 #         # 実装省略
 #         pass
+
+class CommunitySettleView(APIView):
+    """コミュニティに定住する"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        try:
+            membership = request.user.community_membership
+            membership.is_settled = True
+            membership.settled_at = timezone.now()
+            membership.save()
+            
+            return Response({
+                'status': 'settled',
+                'community_id': membership.community_id,
+                'message': f'コミュニティ {membership.community_id} に定住しました'
+            })
+        except CommunityMembership.DoesNotExist:
+            return Response({
+                'error': 'コミュニティに所属していません'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+class CommunityWanderView(APIView):
+    """放浪状態に戻る"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        try:
+            membership = request.user.community_membership
+            membership.is_settled = False
+            membership.settled_at = None
+            membership.save()
+            
+            return Response({
+                'status': 'wandering',
+                'community_id': membership.community_id,
+                'message': '放浪状態に戻りました'
+            })
+        except CommunityMembership.DoesNotExist:
+            return Response({
+                'error': 'コミュニティに所属していません'
+            }, status=status.HTTP_400_BAD_REQUEST)

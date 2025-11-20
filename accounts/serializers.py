@@ -15,12 +15,14 @@ class UserSerializer(serializers.ModelSerializer):
     is_blocked_by_me = serializers.SerializerMethodField()
     am_i_blocked = serializers.SerializerMethodField()
     is_following = serializers.SerializerMethodField()
+    community_id = serializers.SerializerMethodField()
+    is_settled = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'profile_image_url', 'bio', 
-                  'followers_count', 'following_count', 'is_blocked_by_me', 'am_i_blocked', 'is_following']
-        read_only_fields = ['id', 'followers_count', 'following_count']
+                  'followers_count', 'following_count', 'is_blocked_by_me', 'am_i_blocked', 'is_following', 'community_id', 'is_settled']
+        read_only_fields = ['id', 'followers_count', 'following_count', 'community_id', 'is_settled']
     
     def get_followers_count(self, obj):
         return obj.followers_count
@@ -62,6 +64,21 @@ class UserSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return Follow.objects.filter(follower=request.user, following=obj).exists()
         return False
+    
+    def get_community_id(self, obj):
+        """ユーザーの所属コミュニティIDを返す"""
+        try:
+            return obj.community_membership.community_id
+        except Exception:
+            # CommunityMembershipが存在しない、またはAttributeError
+            return None
+    
+    def get_is_settled(self, obj):
+        """ユーザーが定住しているかを返す"""
+        try:
+            return obj.community_membership.is_settled
+        except Exception:
+            return False
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     sns_type = serializers.ChoiceField(choices=UserSNS.SNS_TYPE_CHOICES, required=False, write_only=True, help_text="登録先SNSタイプ")

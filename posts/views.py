@@ -26,9 +26,7 @@ class TimelineView(APIView):
         maybe_trigger_async()
 
         try:
-            followed_user_ids = list(Follow.objects.filter(follower=request.user).values_list('following_id', flat=True))
-            logger.info(f"Followed user IDs: {followed_user_ids}")
-
+            # ブロック関係のユーザーIDを取得
             blocked_user_ids = list(Block.objects.filter(blocker=request.user).values_list('blocked_id', flat=True))
             logger.info(f"Blocked user IDs (by me): {blocked_user_ids}")
 
@@ -38,49 +36,25 @@ class TimelineView(APIView):
             blocked_related_user_ids = set(blocked_user_ids) | set(blocked_by_user_ids)
             logger.info(f"All blocked related user IDs: {blocked_related_user_ids}")
 
-            # 推奨ユーザーIDを取得（フォロー中・自分・ブロック関連を除外）
-            recommended_user_ids = list(
-                UserRecommendation.objects.filter(user=request.user)
-                    .exclude(recommended_user_id__in=followed_user_ids + [request.user.id] + list(blocked_related_user_ids))
-                    .values_list('recommended_user_id', flat=True)
-            )
-            logger.info(f"Recommended user IDs: {recommended_user_ids}")
-
-            # フォロー中のユーザーと自分自身の投稿を取得するQオブジェクト（従来の挙動）
-            q_objects = Q(user=request.user) | Q(user_id__in=followed_user_ids)
-            logger.info(f"Initial Q object conditions: Following IDs {followed_user_ids} OR Self ID {request.user.id}")
-
-            # 全ての投稿をフィルタリング（親投稿のみ、ブロック関係除外）
-            posts_query = Post.objects.filter(q_objects, parent_post__isnull=True)\
-                                    .exclude(user__id__in=blocked_related_user_ids)\
-                                    .select_related('user')\
-                                    .prefetch_related(
-                                        Prefetch('likes', queryset=Like.objects.filter(user=request.user), to_attr='user_like')
-                                    )\
-                                    .annotate(likesCount=Count('likes'), repliesCount=Count('post_replies'))\
-                                    .order_by('-created_at')
-            
-            # ★★★ クエリ実行前にSQLを出力してみる ★★★
+            # コミュニティメンバーの投稿を取得（自分を含む）
+            community_user_ids = [request.user.id]  # 自分を含める
             try:
-                 logger.info(f"Executing SQL Query (approximate): {posts_query.query}")
-            except Exception as sql_ex:
-                 logger.warning(f"Could not print SQL query: {sql_ex}")
+                from recommendations.models import CommunityMembership
+                my_membership = request.user.community_membership
+                community_member_ids = list(
+                    CommunityMembership.objects.filter(community=my_membership.community)
+                    .values_list('user_id', flat=True)
+                )
+                community_user_ids = community_member_ids
+                logger.info(f"Community user IDs (including self): {community_user_ids}")
+            except Exception as e:
+                # コミュニティ未所属の場合は自分のみ
+                logger.info(f"User not in community or error: {e}. Showing only own posts.")
 
-            posts_list = list(posts_query) # ★ クエリを実行してリストに変換
-            post_count = len(posts_list)
-            logger.info(f"Number of posts fetched after filters: {post_count}")
-
-            # isLiked フィールドを追加 & is_from_followed_user フィールドを設定
-            for post in posts_list:
-                post.isLiked = hasattr(post, 'user_like') and len(post.user_like) > 0
-                # フォロー中または自分自身の投稿かどうか
-                post.is_from_followed_user = (post.user_id == request.user.id) or (post.user_id in followed_user_ids)
-                logger.info(f"  Fetched Post ID: {post.id}, User ID: {post.user_id}, Blocked: {post.user_id in blocked_related_user_ids}, FromFollowed: {post.is_from_followed_user}")
-
-            # 推奨ユーザーの投稿を取得（推奨リストかつブロック関連外）
-            recommended_posts_query = Post.objects.filter(
-                parent_post__isnull=True,
-                user_id__in=recommended_user_ids
+            # コミュニティメンバー（自分含む）の投稿を取得
+            posts_query = Post.objects.filter(
+                user_id__in=community_user_ids,
+                parent_post__isnull=True
             ).exclude(
                 user_id__in=blocked_related_user_ids
             ).select_related('user').prefetch_related(
@@ -88,27 +62,18 @@ class TimelineView(APIView):
             ).annotate(
                 likesCount=Count('likes'),
                 repliesCount=Count('post_replies')
-            ).order_by('-created_at')[:10]
+            ).order_by('-created_at')
 
-            # ★★★ クエリ実行前にSQLを出力してみる ★★★
-            try:
-                 logger.info(f"Executing SQL Query (approximate): {recommended_posts_query.query}")
-            except Exception as sql_ex:
-                 logger.warning(f"Could not print SQL query for recommended posts: {sql_ex}")
+            posts_list = list(posts_query)
+            logger.info(f"Number of community posts fetched: {len(posts_list)}")
 
-            recommended_posts_list = list(recommended_posts_query) # ★ クエリを実行してリストに変換
-            recommended_post_count = len(recommended_posts_list)
-            logger.info(f"Number of recommended posts fetched after filters: {recommended_post_count}")
-
-            # isLiked フィールドを追加 & is_from_followed_user フィールドを設定 (推奨投稿にも適用)
-            for post in recommended_posts_list:
+            # isLiked フィールドを追加
+            for post in posts_list:
                 post.isLiked = hasattr(post, 'user_like') and len(post.user_like) > 0
-                # おすすめ投稿はフォロー中ではない
-                post.is_from_followed_user = False
-                logger.info(f"  Fetched Recommended Post ID: {post.id}, User ID: {post.user_id}, Blocked: {post.user_id in blocked_related_user_ids}, FromFollowed: {post.is_from_followed_user}")
+                post.is_from_followed_user = True  # コミュニティ投稿として扱う
+                logger.info(f"  Fetched Community Post ID: {post.id}, User ID: {post.user_id}")
 
-            # 従来通りフォロー＋自分の投稿 ＋ おすすめ投稿を返却
-            serializer = PostSerializer(posts_list + recommended_posts_list, many=True, context={'request': request})
+            serializer = PostSerializer(posts_list, many=True, context={'request': request})
             logger.info(f"TimelineView successfully returning {len(serializer.data)} posts.")
             return Response(serializer.data)
 

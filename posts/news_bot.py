@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # 設定（このファイルだけ編集すればOK）
 # =============================
 # 全体ON/OFF（nanoで切り替え）
-ENABLED = True
+ENABLED = False
 
 # OpenAI APIキー（ハードコード版）
 # 注意: セキュリティ上は推奨されませんが、要件に合わせてここに記載

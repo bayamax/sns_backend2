@@ -11,6 +11,7 @@ from recommendations.models import (
 )
 from django.db.models import Q
 from django.db.models import F as DJF
+from django.db.models import Count
 from accounts.models import UserSNS, Follow
 
 # -------------------- 設定 --------------------
@@ -321,6 +322,142 @@ class Command(BaseCommand):
         except Exception as e:
             self.log(f"[WARN] 相互最良ブーストでエラー: {e}")
 
+    # ---------- STEP 4: コミュニティ検出（ID継承対応） ----------
+    def detect_communities(self):
+        """重み付きロビアン検出でコミュニティを生成（ID継承・定住対応）"""
+        try:
+            import networkx as nx
+            import community as community_louvain
+            from recommendations.models import Community, CommunityMembership
+        except ImportError as e:
+            self.log(f"[ERROR] 必要なライブラリがインストールされていません: {e}")
+            self.log("pip install networkx python-louvain を実行してください")
+            return
+        
+        self.log("🔍 STEP4: コミュニティ検出開始（ID継承対応）")
+        
+        # === STEP 1: 旧情報を保存 ===
+        old_communities = {}  # {community_id: [user_ids]}
+        settled_users = {}    # {user_id: community_id}
+        
+        for membership in CommunityMembership.objects.select_related('community'):
+            comm_id = membership.community_id
+            user_id = membership.user_id
+            
+            old_communities.setdefault(comm_id, []).append(user_id)
+            
+            if membership.is_settled:
+                settled_users[user_id] = comm_id
+        
+        self.log(f"  旧コミュニティ数: {len(old_communities)}, 定住ユーザー: {len(settled_users)}")
+        
+        # === STEP 2: グラフ構築（全ユーザー） ===
+        G = nx.Graph()
+        
+        # Followエッジ（重み1.0）
+        follow_count = 0
+        # 対象SNSユーザー間のフォローに限定（例: threadplanet）
+        follow_qs = Follow.objects.filter(
+            follower__sns_type__sns_type=self.target_sns,
+            following__sns_type__sns_type=self.target_sns,
+        ).values("follower_id", "following_id")
+        for rec in follow_qs:
+            G.add_edge(rec["follower_id"], rec["following_id"], weight=1.0)
+            follow_count += 1
+        
+        # Recommendationエッジ（重み=score）
+        rec_count = 0
+        for rec in UserRecommendation.objects.filter(self.sns_q):
+            if G.has_edge(rec.user_id, rec.recommended_user_id):
+                G[rec.user_id][rec.recommended_user_id]['weight'] += rec.score
+            else:
+                G.add_edge(rec.user_id, rec.recommended_user_id, weight=rec.score)
+            rec_count += 1
+        
+        self.log(f"  Follow エッジ: {follow_count} 件, Recommendation エッジ: {rec_count} 件")
+        self.log(f"  総ノード数: {G.number_of_nodes()}, 総エッジ数: {G.number_of_edges()}")
+        
+        if G.number_of_nodes() == 0:
+            self.log("[WARN] グラフが空です。コミュニティ検出をスキップします")
+            return
+        
+        # === STEP 3: ロビアン実行 ===
+        self.log("  ロビアン検出実行中...")
+        partition = community_louvain.best_partition(G, weight='weight')
+        
+        # === STEP 4: 新グループを整理（放浪ユーザーのみ） ===
+        new_groups = {}  # {louvain_id: [user_ids]}
+        for user_id, louvain_id in partition.items():
+            if user_id not in settled_users:  # 定住ユーザーは除外
+                new_groups.setdefault(louvain_id, []).append(user_id)
+        
+        self.log(f"  新グループ数（放浪ユーザー）: {len(new_groups)}")
+        
+        # === STEP 5: ID継承マッピング ===
+        id_mapping = {}  # {louvain_id: 既存community_id}
+        
+        for old_comm_id, old_members in old_communities.items():
+            # 放浪メンバーのみ考慮
+            old_wanderers = [u for u in old_members if u not in settled_users]
+            
+            if not old_wanderers:
+                self.log(f"  旧Community {old_comm_id}: 全員定住（ID保持）")
+                continue
+            
+            # 最も多くの旧メンバーを含む新グループを探す
+            best_louvain_id = None
+            best_overlap = 0
+            
+            for louvain_id, new_members in new_groups.items():
+                if louvain_id in id_mapping:
+                    continue  # 既に使用済み
+                
+                overlap = len(set(old_wanderers) & set(new_members))
+                if overlap > best_overlap:
+                    best_overlap = overlap
+                    best_louvain_id = louvain_id
+            
+            if best_louvain_id is not None and best_overlap > 0:
+                id_mapping[best_louvain_id] = old_comm_id
+                self.log(f"  旧Community {old_comm_id} → 新グループ {best_louvain_id} ({best_overlap}人継承)")
+        
+        # === STEP 6: 放浪ユーザーのみ削除 ===
+        deleted_count = CommunityMembership.objects.filter(is_settled=False).delete()[0]
+        self.log(f"  放浪ユーザー削除: {deleted_count} 件")
+        
+        # === STEP 7: 新規メンバーシップ作成 ===
+        created_communities = 0
+        for louvain_id, members in new_groups.items():
+            if louvain_id in id_mapping:
+                # 既存IDを再利用
+                community_id = id_mapping[louvain_id]
+                community = Community.objects.get(id=community_id)
+            else:
+                # 新規作成
+                community = Community.objects.create()
+                created_communities += 1
+            
+            for user_id in members:
+                CommunityMembership.objects.create(
+                    user_id=user_id,
+                    community=community,
+                    is_settled=False
+                )
+        
+        self.log(f"✅ コミュニティ検出完了: 継承 {len(id_mapping)}個, 新規 {created_communities}個")
+        
+        # 各コミュニティのサイズをログ出力
+        all_communities = Community.objects.annotate(
+            member_count=Count('members')
+        ).filter(member_count__gt=0).order_by('-member_count')
+        
+        for community in all_communities[:10]:  # 上位10個のみ表示
+            settled_count = CommunityMembership.objects.filter(
+                community=community, is_settled=True
+            ).count()
+            wandering_count = community.member_count - settled_count
+            self.log(f"  Community {community.id}: {community.member_count}人 (定住{settled_count}, 放浪{wandering_count})")
+
     # ---------- メイン ----------
     def handle(self, *args, **opt):
         t0 = time.time()
@@ -434,6 +571,9 @@ class Command(BaseCommand):
 
         # 3. 推薦再計算
         self.rebuild_recommendations(predictor, device, opt["top_k"])
+
+        # 4. コミュニティ検出
+        self.detect_communities()
 
         self.log(f"🎉 ALL DONE in {time.time() - t0:.1f}s")
 
