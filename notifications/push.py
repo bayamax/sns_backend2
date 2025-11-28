@@ -80,11 +80,13 @@ def send_ios_notification(
     title: str,
     body: str,
     custom_data: Dict | None = None,
+    badge: int | None = None,
 ):
     """指定したデバイストークンへプッシュ通知を送信する。
     device_tokens   : 送信先トークンのリスト (最大1000件程度推奨)
     title, body     : 表示するタイトル/本文
     custom_data     : userInfo に含める追加ペイロード(dict)
+    badge           : アプリアイコンに表示するバッジ数（Noneの場合は1）
     """
     if not device_tokens:
         logger.debug("送信対象デバイスがありません")
@@ -99,7 +101,7 @@ def send_ios_notification(
             "title": title,
             "body": body,
         },
-        badge=1,
+        badge=badge if badge is not None else 1,
         sound="default",
         custom=custom_data or {}
     )

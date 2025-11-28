@@ -92,8 +92,15 @@ def send_push_after_notification_created(sender, instance, created, **kwargs):
         }
         title = title_map.get(instance.notification_type, "お知らせ")
         body = instance.post.content[:50] if instance.post else "SNS"
+        
+        # 受信者の未読通知数を計算してバッジに設定
+        unread_count = Notification.objects.filter(
+            recipient=instance.recipient,
+            read=False
+        ).count()
+        
         custom_data = {"notification_id": instance.id}
-        send_ios_notification(device_tokens, title, body, custom_data)
+        send_ios_notification(device_tokens, title, body, custom_data, badge=unread_count)
     except Exception as e:
         import logging
 
