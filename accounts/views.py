@@ -333,11 +333,11 @@ class FollowersListView(APIView):
         except User.DoesNotExist:
             return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
         
-        # フォロワーを取得
-        followers = User.objects.filter(following__following=user)
+        # フォロワーを取得（community_membershipをプリフェッチしてcommunity_idを取得）
+        followers = User.objects.filter(following__following=user).select_related('community_membership')
         
-        # シリアライズして返す
-        serializer = UserListSerializer(followers, many=True, context={'request': request})
+        # シリアライズして返す（UserSerializerでcommunity_idを含める）
+        serializer = UserSerializer(followers, many=True, context={'request': request})
         return Response(serializer.data)
 
 class FollowingListView(APIView):
@@ -350,11 +350,11 @@ class FollowingListView(APIView):
         except User.DoesNotExist:
             return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
         
-        # フォロー中ユーザーを取得
-        following = User.objects.filter(followers__follower=user)
+        # フォロー中ユーザーを取得（community_membershipをプリフェッチしてcommunity_idを取得）
+        following = User.objects.filter(followers__follower=user).select_related('community_membership')
         
-        # シリアライズして返す
-        serializer = UserListSerializer(following, many=True, context={'request': request})
+        # シリアライズして返す（UserSerializerでcommunity_idを含める）
+        serializer = UserSerializer(following, many=True, context={'request': request})
         return Response(serializer.data)
 
 class AccountDeleteView(generics.GenericAPIView):
