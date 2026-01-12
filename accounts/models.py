@@ -93,6 +93,7 @@ class UserSNS(models.Model):
     SNS_TYPE_CHOICES = (
         ('threadplanet', 'ThreadPlanet (従来版)'),
         ('map', '位置情報SNS'),
+        ('3', 'Third App'),
     )
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sns_type')
     sns_type = models.CharField(max_length=20, choices=SNS_TYPE_CHOICES, default='map')
