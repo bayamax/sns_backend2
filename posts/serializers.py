@@ -8,6 +8,7 @@ User = get_user_model()
 
 class UserBriefSerializer(serializers.ModelSerializer):
     """簡易的なユーザー情報のシリアライザー（投稿用）"""
+    profile_image_url = serializers.SerializerMethodField()
     sns_type = serializers.SerializerMethodField()
 
     class Meta:
