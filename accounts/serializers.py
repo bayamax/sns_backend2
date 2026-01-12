@@ -17,11 +17,12 @@ class UserSerializer(serializers.ModelSerializer):
     is_following = serializers.SerializerMethodField()
     community_id = serializers.SerializerMethodField()
     is_settled = serializers.SerializerMethodField()
+    sns_type = serializers.CharField(source='sns_type.sns_type', read_only=True)
     
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'profile_image_url', 'bio', 
-                  'followers_count', 'following_count', 'is_blocked_by_me', 'am_i_blocked', 'is_following', 'community_id', 'is_settled']
+                  'followers_count', 'following_count', 'is_blocked_by_me', 'am_i_blocked', 'is_following', 'community_id', 'is_settled', 'sns_type']
         read_only_fields = ['id', 'followers_count', 'following_count', 'community_id', 'is_settled']
     
     def get_followers_count(self, obj):
