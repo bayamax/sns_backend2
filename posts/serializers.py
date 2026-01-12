@@ -8,11 +8,11 @@ User = get_user_model()
 
 class UserBriefSerializer(serializers.ModelSerializer):
     """簡易的なユーザー情報のシリアライザー（投稿用）"""
-    profile_image_url = serializers.SerializerMethodField()
-    
+    sns_type = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ['id', 'username', 'profile_image_url', 'bio']
+        fields = ['id', 'username', 'profile_image_url', 'bio', 'sns_type']
 
     def get_profile_image_url(self, obj):
         if obj.profile_image and hasattr(obj.profile_image, 'url'):
@@ -20,6 +20,11 @@ class UserBriefSerializer(serializers.ModelSerializer):
             if request:
                 return request.build_absolute_uri(obj.profile_image.url)
             return obj.profile_image.url
+        return None
+
+    def get_sns_type(self, obj):
+        if hasattr(obj, 'sns_profile'):
+            return obj.sns_profile.sns_type
         return None
 
 class PostSerializer(serializers.ModelSerializer):
