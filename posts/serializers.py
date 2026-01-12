@@ -23,8 +23,12 @@ class UserBriefSerializer(serializers.ModelSerializer):
         return None
 
     def get_sns_type(self, obj):
-        if hasattr(obj, 'sns_profile'):
-            return obj.sns_profile.sns_type
+        # UserSNS モデルの related_name は 'sns_type'
+        try:
+            if hasattr(obj, 'sns_type'):
+                return obj.sns_type.sns_type
+        except Exception:
+            pass
         return None
 
 class PostSerializer(serializers.ModelSerializer):
